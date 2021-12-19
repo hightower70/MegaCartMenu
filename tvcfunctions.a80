@@ -1,0 +1,227 @@
+        ; **************************************
+        ; * Video mode configuration functions *
+        ; **************************************
+
+        ;---------------------------------------------------------------------
+        ; Copies TVC program file from Cart ROM to RAM
+        ; Input:  HL - ROM address
+        ;         DE - RAM address
+        ;         BC - Number of bytes to copy
+        ; Output: HL - last byte address of ROM file
+        ;         DE - last address of the RAM
+        ; Destroys: HL, BC, DE, A, F
+
+set_paging_U0_U1_VID_SYS:
+        ld	a, P_U0_U1_VID_SYS      ; Page in video memory to page 2.: U1, U2, VID, SYS
+        jp      set_paging
+
+set_paging_U0_U1_U2_SYS:
+        ld	a, P_U0_U1_U2_SYS	; Set paging to U0, U1, U2, SYS
+        jp      set_paging
+
+set_paging_U0_U1_U2_U3:
+        ld	a, P_U0_U1_U2_U3        ; Set paging to U0, U1, U2, U3
+        jp      set_paging
+
+set_paging_U0_U1_VID_U3:
+        ld	A,P_U0_U1_VID_U3
+        jp      set_paging
+
+set_paging:
+	ld	(P_SAVE), a
+	out	(PAGE_REG), a
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Changes the value of a BASIC string variable
+        ; Input:  HL - New string value (zero terminated)
+        ;         DE - Name of the variable
+        ;          C - Length of the variable name
+LETSTRINGVARIABLE:
+        push    hl                      ; push string pointer
+        ld      hl,(CHAIN)              ; load symbol area address
+
+SEARCH_FOR_SYMBOL:
+        push    hl                      ; save current symbol address
+        inc     hl                      ; skip next symbol address
+        inc     hl
+        ld      a, (hl)                 ; load symbol name length
+        cp      a, c                    ; compare with length of the symbol to search 
+        jr      nz, NEXT_SYMBOL         ; Length are different -> next symbol
+        push    de                      ; save symbol name pointer
+
+        ; compare symbol name
+        ld      b, a
+        inc     hl                      ; skip symbol length
+
+COMPARE_SYMBOL: 
+        ld      a, (de)
+        cp      (hl)
+        jr      nz, SYMBOL_NAME_DIFFERENT
+        inc     hl
+        inc     de
+        djnz    COMPARE_SYMBOL
+
+        ; symbol name found
+        ld      a,(hl)                  ; load symbol type
+        cp      a,0
+        jr      nz, WRONG_SYMBOL_TYPE
+
+        ; copy value string
+        inc     hl                      ; skip type
+        inc     hl                      ; skip allocated length
+        ex      hl, de                  ; move destination to de
+        pop     hl
+        pop     hl
+        pop     hl                      ; reload string pointer
+
+        push    de                      ; store length position
+        inc     de                      ; first character position
+        ld      b, 0                    ; string length
+
+CopyNextCharacter:
+        ld      a, (hl)                 ; load character
+        or      a
+        jr      z, StringEnd
+        ld      (de), a
+        inc     hl
+        inc     de
+        inc     b
+        jr      CopyNextCharacter
+
+StringEnd:
+        pop     hl
+        ld      (hl),  b                ; store length
+
+        ret
+
+WRONG_SYMBOL_TYPE:
+SYMBOL_NAME_DIFFERENT:
+        pop     de                      ; reload symbol name pointer
+        pop     hl                      ; reload current address pointer
+        pop     hl                      ; reload string pointer
+
+        ret
+
+NEXT_SYMBOL
+        pop     hl                      ; reload current symbol address
+        ld      a, (hl)                 ; load next symbol address
+        inc     hl
+        ld      h, (hl)
+        ld      l, a
+        ld      a, h
+        cp      a, $c0
+        jr      c, SEARCH_FOR_SYMBOL
+
+        ; symbol not found -> do nothing
+        pop     hl                      ; reload string pointer
+        ret  
+
+        ;---------------------------------------------------------------------
+        ; Draws a horizontal line
+        ; Input:  B - X 
+        ;         C - Y
+        ;         A - Length
+DrawHorizontalLine:
+        call    PosToVidmemAddress
+
+        ld      b, a
+        ld      a, (CharBackgroundSave1+1)
+
+DrawHorizontalLineL1:
+        ld      (hl), a
+        inc     hl
+        djnz    DrawHorizontalLineL1
+
+        ret
+
+        ; **************************************
+        ; * ZX7 decompression                  *
+        ; **************************************
+
+        ; -----------------------------------------------------------------------------
+        ; ZX7 decoder by Einar Saukas & Urusergi
+        ; "Turbo" version (88 bytes, 25% faster)
+        ; -----------------------------------------------------------------------------
+        ; Parameters:
+        ;   HL: source address (compressed data)
+        ;   DE: destination address (decompressing)
+        ; -----------------------------------------------------------------------------
+dzx7_turbo:		
+        ld	a,$80
+
+dzx7t_copy_byte_loop:	
+        ldi				; copy literal byte
+
+dzx7t_main_loop:	
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        jr	nc,dzx7t_copy_byte_loop	; next bit indicates either literal or sequence
+                        
+        ; determine number of bits used for length (Elias gamma coding)
+        push	de
+        ld	bc,1
+        ld	d,b
+
+dzx7t_len_size_loop:	
+        inc	d
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        jr	nc,dzx7t_len_size_loop
+        jp	dzx7t_len_value_START
+
+        ; determine length
+dzx7t_len_value_loop:	
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        rl	c
+        rl	b
+        jr	c,dzx7t_exit		; check end marker
+
+dzx7t_len_value_START:	
+        dec	d
+        jr	nz,dzx7t_len_value_loop
+        inc	bc			; adjust length
+                        
+        ; determine offset
+        ld	e,(hl)			; load offset flag (1 bit) + offset value (7 bits)
+        inc	hl
+        sll	e			; opcode for undocumented instruction "SLL E" aka "SLS E"
+        jr	nc,dzx7t_offset_end	; if offset flag is set, load 4 extra bits
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        rl	d			; insert first bit into D
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        rl	d			; insert second bit into D
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        rl	d			; insert third bit into D
+        add	a,a			; check next bit
+        call	z,dzx7t_load_bits	; no more bits left?
+        ccf
+        jr	c,dzx7t_offset_end
+        inc	d			; equivalent to adding 128 to DE
+
+dzx7t_offset_end:	
+        rr	e			; insert inverted fourth bit into E
+                        
+        ; copy previous sequence
+        ex	(sp),hl			; store source, restore destination
+        push	hl			; store destination
+        sbc	hl,de			; HL = destination - offset - 1
+        pop	de			; DE = destination
+        ldir
+dzx7t_exit:		
+        pop	hl			; restore source address (compressed data)
+        jp	nc,dzx7t_main_loop
+                        
+dzx7t_load_bits:	
+        ld	a,(hl)			; load another group of 8 bits
+        inc	hl
+        rla
+        ret
+				
+
+SAVED_MEM_PAGES  db     0
+SAVED_GRAPH_MODE db     0

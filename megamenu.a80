@@ -1,0 +1,885 @@
+
+        .include "definitions.a80"
+
+        org     PROGRAM_START_ADDRESS
+
+        ; BASIC program
+        db      $0b, $01, $00, $f5, $20, $4e, $24, $a8, $31, $36, $ff   ; 1 DIM N$*16
+        db      $0f, $02, $00, $58, $9a, "USR", $96, "6722", $95, $ff   ; 2 X=USR(6720)
+        db      $12, $03, $00, $ed, $20, $4e, $24, $9d, $22, $22, $20, $b5, $20, $e8, $20, $4e, $24, $ff, $00 ; 3 IF N$<>"" THEN LOAD N$
+
+
+        ; BASIC SYMBOL TABLE
+        ds      38                      
+
+        ; Program start
+        jr      START
+
+        ; ** Variables **
+
+IX_SAVE dw      0
+IY_SAVE dw      0
+
+COLLECTION_INDEX        db      0
+COLLECTION_COUNT        db      0
+
+IMAGE_INDEX             db      0
+IMAGE_COUNT             db      6
+YEAR_DEC                db      0
+COLLECTION              dw      0
+SCROLL_TEXT_DELAY       db      0
+SCROLL_PHASE            db      0
+SCROLL_CHARACTER        dw      0
+
+LEFT_IMAGE_ADDRESS:
+        dw      IMAGE_BUFFER0
+
+CENTER_IMAGE_ADDRESS:
+        dw      IMAGE_BUFFER1
+        
+RIGHT_IMAGE_ADDRESS:
+        dw      IMAGE_BUFFER2
+
+        ; ** Program start **
+START:
+        ld      (IX_SAVE), ix
+        ld      (IY_SAVE), iy
+
+        ; set video mode to 16 color
+        ld      c,2
+        rst     30h
+        db      $04
+
+        ; set CRTC interrupr position to the original value
+        ld      a, 14           
+        out     (CRTC_ADDRESS), a
+        ld      a, $0e
+        out     (CRTC_DATA), a
+
+        ld      a, 15
+        out     (CRTC_ADDRESS), a
+        ld      a, $ff
+        out     (CRTC_DATA), a
+
+        ; set border color to white
+        ld      a, $aa
+        ld      (BORDER), a
+
+        ; show main screen
+        call    set_paging_U0_U1_VID_SYS        ; page in video memory
+
+        ld      hl, megaplex+2                  ; show main screen
+        ld      de, VIDEOMEM
+        call    dzx7_turbo
+
+        ; draw 'cartridge' text
+        ld      a, 0
+        call    SetCharacterBackgroundColor
+
+        ld      a, 16+5
+        call    SetCharColor
+
+        ld      bc, $281f
+        ld      hl, CARTRIDGE_STRING
+        ld      d, 255
+        call    DrawStr
+
+        call    set_paging_U0_U1_U2_SYS        ; restore paging
+        
+        ; Init and draw menu
+        call    DrawMenu
+
+        ; Init caroussel
+        xor     a
+        ld      (IMAGE_INDEX), a
+        call    InitCarousel
+
+        ; init scroll text
+        call    set_paging_U0_U1_VID_SYS        ; page in video memory
+
+        ld      a, 7                            ; set character color
+        call    SetCharColor
+
+        ld      a, 15                           ; set background color
+        call    SetCharacterBackgroundColor
+
+        ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
+        ld      a, ' '
+        call    PutChar                         
+
+        call    set_paging_U0_U1_U2_SYS        ; restore paging
+
+        ld      a, 0
+        ld      (SCROLL_PHASE), a
+        ld      hl, SCROLL_TEXT
+        ld      (SCROLL_CHARACTER), hl
+
+WaitForKey:
+        rst     30h
+        db      KBD_STATUS
+        ld      a, c
+        cp      a, $ff
+        jr      nz, ScrollText
+
+        rst     30h
+        db      KBD_CHIN
+
+        ld      a, c
+        cp      JOY_LEFT
+        jp      z, move_left
+
+        cp      JOY_RIGHT
+        jp      z, MoveRight
+
+        cp      JOY_UP
+        jp      z, MoveUp
+
+        cp      JOY_DOWN
+        jp      z, MoveDown
+
+        cp      JOY_FIRE
+        jp      z, RunProgram
+
+        cp      RETURN
+        jp      z, RunProgram
+
+ScrollText:
+        ld      a, (SCROLL_TEXT_DELAY)
+        dec     a
+        ld      (SCROLL_TEXT_DELAY), a
+        jr      nz, WaitForKey
+
+        ld      a, 160
+        ld      (SCROLL_TEXT_DELAY), a
+
+        call    LeftScroll
+
+        jr      WaitForKey
+
+LeftScroll:
+        halt
+
+        call    set_paging_U0_U1_VID_SYS        ; page in video memory
+
+        ld      a, (SCROLL_PHASE)               ; update scroll phase (scroll position within character)
+        inc     a
+        and     $03                             ; valid phase values are 0-3
+        ld      (SCROLL_PHASE), a
+
+        or      a
+        jr      nz, LeftScrollPhaseNonzero
+
+        ; at zero phase draw character
+
+        ld      a, 7                            ; set character color
+        call    SetCharColor
+
+        ld      a, 15                           ; set background color
+        call    SetCharacterBackgroundColor
+
+        ld      hl, (SCROLL_CHARACTER)          ; get character pos
+        ld      a, (hl)
+        inc     hl
+        or      a                               ; end of string?
+        jr      nz, LeftScrollNoStringEnd
+
+        ld      hl, SCROLL_TEXT                 ; restart from the first character
+        ld      a,(hl)
+        inc     hl
+
+LeftScrollNoStringEnd:
+        ld      (SCROLL_CHARACTER), hl          ; store character address
+
+        ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
+        call    PutChar                         ; a register already contains the character
+
+LeftScrollPhaseNonzero:
+        ld      ix, VIDEOMEM + SCREEN_WIDTH * 240
+
+        ; scroll area to left by one pixel
+        ld      hl, VIDEOMEM + SCREEN_WIDTH * 235 - 1
+        ld      c, 5                            ; scroll are height = 5
+
+LeftScrollLine:
+        ; get incoming pixel data
+        ld      a, (SCROLL_PHASE)
+
+        cp      a, 0
+        jr      nz, ScrollPhase1
+
+        ld      a, (ix)                         ; load pixel data
+        and     a, $aa                          ; keep right pixel
+        srl     a                               ; left pixel -> right pixel
+        ld      d, a
+        jr      LeftScrollLinePixels
+
+ScrollPhase1:
+        cp      a, 1
+        jr      nz, ScrollPhase2
+
+        ld      a, (ix)                         ; load pixel data
+        and     a, $55                          ; keep right pixel
+        ld      d, a
+        jr      LeftScrollLinePixels
+
+ScrollPhase2:
+        cp      a, 2
+        jr      nz, ScrollPhase3
+
+        ld      a, (ix+1)                       ; load pixel data
+        and     a, $aa                          ; keep right pixel
+        srl     a                               ; left pixel -> right pixel        
+        ld      d, a
+
+        jr      LeftScrollLinePixels
+
+ScrollPhase3:
+        ld      a, (ix+1)                       ; load pixel data
+        and     a, $55                          ; keep right pixel
+        ld      d, a
+
+LeftScrollLinePixels:
+        ld      b, SCREEN_WIDTH
+         
+LeftScrollPixel:
+        ld      a, (hl)                 ; load pixel
+        ld      e, a                    ; save pixel for scroll
+        sla     a                       ; move one pixel to the left
+        and     $aa                     ; keep only the first pixel
+        or      d                       ; add second pixel
+        ld      (hl), a                 ; save new pixel
+        srl     e                       ; left pixel -> right pixel
+        ld      a, $55                  ; keep only right
+        and     a, e
+        ld      d, a                    ; save it in d register
+        dec     hl                      ; next pixel
+        djnz    LeftScrollPixel
+        
+        ld      de, SCREEN_WIDTH
+        add     hl, de
+        add     hl, de
+        add     ix, de
+        dec     c
+        jr      nz, LeftScrollLine
+
+        call    set_paging_U0_U1_U2_SYS        ; restore paging
+
+        ret
+         
+
+
+ReturnToBasic:
+        ld      ix, (IX_SAVE)
+        ld      iy, (IY_SAVE)
+
+        ; set border color to black
+        ld      a, $00
+        ld      (BORDER), a
+
+        ; set video mode to 4 color
+        ld      c,1
+        rst     30h
+        db      VMODE
+
+        ; set ink to 1
+        ld      a, 1
+        ld      (INK), a
+
+        ; set paper to 0
+        ld      a, 0
+        ld      (PAPER), a
+
+        ; set first ink, paper palette color to black
+        ld      de, PALETTE
+        rst     30h
+        db      PAL
+         
+        ret     
+
+        ;---------------------------------------------------------------------
+        ; Runs selected program
+        ; Input:
+        ; Output:
+        ;
+RunProgram:
+        ld      de, GamesInfo.File
+        call    GetCurrentGamesInfoAddress
+
+        ld      de, FILENAME_VARIABLE
+        ld      c, 2
+        call    LETSTRINGVARIABLE
+
+        jr      ReturnToBasic
+
+
+        ; Selects previous collection and updates the screen
+MoveUp:
+        call    SaveSelectionCollectionPos
+        ld      a, (COLLECTION_INDEX)
+        or      a
+        jr      nz, LDecrementCollectionIndex
+
+        ld      a, (COLLECTION_COUNT)
+        dec     a
+        jr      LStoreIndex
+
+LDecrementCollectionIndex:
+        dec     a
+
+LStoreIndex:
+        ld      (COLLECTION_INDEX), a           ; stores updated index
+
+        call    DrawMenu                        ; update menu
+
+        call    InitCarousel                    ; reinit carousel with the current collection
+
+        call    DrawCarousel                    ; update carousel
+
+        jp      WaitForKey
+
+        ; Selects next collection and updates the screen
+MoveDown:
+        call    SaveSelectionCollectionPos      ; saves position
+
+        ld      a, (COLLECTION_COUNT)           ; increment collection index
+        ld      b, a                            ; or wrap around if overflows
+        ld      a, (COLLECTION_INDEX)
+        inc     a
+        cp      a, b
+        jr      c, LStoreIndex
+
+        xor     a
+        jr      LStoreIndex
+
+MoveRight:
+        ld      bc, (LEFT_IMAGE_ADDRESS)
+        ld      hl, (CENTER_IMAGE_ADDRESS)
+        ld      (LEFT_IMAGE_ADDRESS), hl
+        ld      hl, (RIGHT_IMAGE_ADDRESS)
+        ld      (CENTER_IMAGE_ADDRESS), hl
+        ld      (RIGHT_IMAGE_ADDRESS), bc
+
+        ld      a, (IMAGE_COUNT)
+        ld      b, a
+        ld      a, (IMAGE_INDEX)
+        inc     a
+        cp      a, b
+        jr      c, move_right_1
+
+        xor     a
+
+move_right_1:
+        ld      (IMAGE_INDEX), a
+
+        inc     a
+        cp      a, b
+        jr      c, move_right_2
+
+        xor     a
+
+move_right_2:
+        ld      de, (RIGHT_IMAGE_ADDRESS)
+        call    DecompressGameScreen
+
+        call    DrawCarousel
+
+        jp      WaitForKey
+
+move_left:
+        ld      bc, (RIGHT_IMAGE_ADDRESS)
+        ld      hl, (CENTER_IMAGE_ADDRESS)
+        ld      (RIGHT_IMAGE_ADDRESS), hl
+        ld      hl, (LEFT_IMAGE_ADDRESS)
+        ld      (CENTER_IMAGE_ADDRESS), hl
+        ld      (LEFT_IMAGE_ADDRESS), bc
+
+        ld      a, (IMAGE_COUNT)
+        ld      b, a
+        ld      a, (IMAGE_INDEX)
+        or      a
+        jr      nz, move_left_1
+
+        ld      a, b 
+
+move_left_1:
+        dec     a
+        ld      (IMAGE_INDEX), a
+
+        dec     a
+        jp      p, move_left_2
+
+        ld      a, b
+        dec     a
+
+move_left_2:
+        ld      de, (LEFT_IMAGE_ADDRESS)
+        call    DecompressGameScreen
+
+        call    DrawCarousel
+
+        jp      WaitForKey
+
+
+DrawMenu:
+        call    set_paging_U0_U1_VID_SYS        ; page in video memory
+
+        ld      a, 0
+        ld      (COLLECTION_COUNT), a
+        ld      iy, GAMES_COLLECTION
+
+LNextMenuItem:
+        ld      a, (IY+GamesCollection.Count)   ; check for last item in the list
+        or      a
+        jr      nz, LMenuNextItem
+
+        call    set_paging_U0_U1_U2_SYS        ; restore paging
+        ret
+
+LMenuNextItem:
+        ld      a, (COLLECTION_COUNT)           ; check for selected collection index
+        ld      b, a
+        ld      a, (COLLECTION_INDEX)           ; load selected index
+        cp      a, b
+        jr      nz, LNotSelected
+
+        ; update collection information
+        ld      a, (IY+GamesCollection.Count)   ; check for last item in the list
+        ld      (IMAGE_COUNT), a
+
+        ld      a, (IY+GamesCollection.Index)
+        ld      (IMAGE_INDEX), a
+
+        ld      a, (IY+GamesCollection.YearDec)
+        ld      (YEAR_DEC), a
+
+        ld      a, (IY+GamesCollection.Collection)
+        ld      (COLLECTION), a
+
+        ld      a, (IY+GamesCollection.Collection+1)
+        ld      (COLLECTION+1), a
+
+        ; set selected colors
+        ld      a, 13
+        call    SetCharacterBackgroundColor
+
+        ld      a, 32+5
+        call    SetCharColor
+
+        jr      LDrawMenu
+
+LNotSelected:
+        ; set non-selected color
+        ld      a, 15
+        call    SetCharacterBackgroundColor
+
+        ld      a, 32+5
+        call    SetCharColor
+
+LDrawMenu:
+        ld      c, 0
+        call    GetMenuCoordinates
+        ld      a, 10
+        call    DrawHorizontalLine
+
+        ld      c, 1
+        call    GetMenuCoordinates
+        ld      a, 10
+        call    DrawHorizontalLine
+
+        ; year text addess
+        push    iy
+        pop     hl
+        ld      bc, GamesCollection.Year
+        add     hl, bc
+
+        ; draw year
+        ld      c, 2
+        call    GetMenuCoordinates
+        ld      d, 8
+        call    DrawStr
+
+        ld      c, 7
+        call    GetMenuCoordinates
+        ld      a, 10
+        call    DrawHorizontalLine
+
+        ld      c, 8
+        call    GetMenuCoordinates
+        ld      a, 10
+        call    DrawHorizontalLine
+
+        ld      hl, COLLECTION_COUNT
+        inc     (hl)
+
+        ld      bc, GamesCollection
+        push    iy
+        pop     hl
+        add     hl, bc
+        push    hl
+        pop     iy
+
+        jp      LNextMenuItem
+
+        ;---------------------------------------------------------------------
+        ; Calculates menu item coordinates
+        ; Input:  C - Offset within the menu item
+        ; Output: B - X coordinate of the menuitem
+        ;         C - Y coordiante of the menuitem
+GetMenuCoordinates:
+        ld      a, (COLLECTION_COUNT)           ; load current index
+        ld      b, a
+        add     a, a                            ; multiply by 9
+        add     a, a
+        add     a, a
+        add     a, b
+
+        add     a, c                            ; add offset to the position
+
+        ld      c, $21                          ; First menu item Y pos
+        add     a, c
+        ld      c, a                            ; Y coorinate to c register
+        ld      b, $1c                          ; X coordinate
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Saves current selected image index into the collection data
+        ; Input: -
+        ; Output: -
+SaveSelectionCollectionPos:
+        ld      a, (COLLECTION_INDEX)           ; calculate Index address of the current collection
+        ld      b,  a                           ; HL = COLLECTION_INDEX * sizeof(GamesCollection) + GamesCollection.Index
+        ld      hl, GAMES_COLLECTION + GamesCollection.Index
+        ld      de, GamesCollection
+        or      a
+        jr      z, LStorePos
+
+LCalculatePosAddres:
+        add     hl, de
+        djnz    LCalculatePosAddres
+
+LStorePos:
+        ld      a, (IMAGE_INDEX)                ; save pos
+        ld      (hl), a
+
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Initializes image carousel
+        ; Input: -
+        ; Output: -
+InitCarousel:
+        ; init image carousell
+        ld      hl, IMAGE_BUFFER0               ; reset buffers
+        ld      (LEFT_IMAGE_ADDRESS), hl
+
+        ld      hl, IMAGE_BUFFER1
+        ld      (CENTER_IMAGE_ADDRESS), hl
+
+        ld      hl, IMAGE_BUFFER2
+        ld      (RIGHT_IMAGE_ADDRESS), hl
+
+        ; load screens
+        ld      a, (IMAGE_COUNT)                ; left screen
+        dec     a
+        ld      de, (LEFT_IMAGE_ADDRESS)
+        call    DecompressGameScreen
+
+        ld      a, (IMAGE_INDEX)                ; center screen
+        ld      de, (CENTER_IMAGE_ADDRESS)
+        call    DecompressGameScreen
+
+        ld      a, (IMAGE_INDEX)                ; right screen
+        inc     a
+        ld      de, (RIGHT_IMAGE_ADDRESS)
+        call    DecompressGameScreen
+
+        call    DrawCarousel
+
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Draws image carusel
+        ; Input: -
+        ; Output: -
+DrawCarousel:
+        call    set_paging_U0_U1_VID_U3         ; set paging
+
+        ; draw center screen
+        ld      a, GAME_IMAGE_HEIGHT
+        ld      de, CENTER_IMAGE_COORDINATES
+        ld      hl, (CENTER_IMAGE_ADDRESS)
+
+next_line:        
+        ld      bc, GAME_IMAGE_WIDTH
+        ldir
+
+        ex      hl, de
+        ld      bc, SCREEN_WIDTH - GAME_IMAGE_WIDTH
+        add     hl, bc
+        ex      hl, de
+
+        dec     a
+        jr      nz, next_line
+
+        ; draw left screen
+        ld      de, LEFT_IMAGE_COORDINATES
+        ld      hl, (LEFT_IMAGE_ADDRESS)
+        ld      bc, LEFT_IMAGE_OFFSET
+        add     hl, bc
+
+        ld      xh, $bf
+        ld      xl, $15
+
+        ld      c, GAME_IMAGE_HEIGHT
+
+start_copy_left_image_line:
+        ld      b, GAME_IMAGE_WIDTH - LEFT_IMAGE_OFFSET
+
+copy_left_image_line:
+        ld      a, (hl)
+        and     xh
+        or      xl
+        ld      (de), a
+        inc     hl
+        inc     de
+        djnz    copy_left_image_line
+
+        dec     c
+        jr      z, left_image_finished
+
+        ld      a, c                            ; save line counter
+        ld      bc, LEFT_IMAGE_OFFSET
+        add     hl, bc
+        ex      hl, de
+        ld      bc, SCREEN_WIDTH -(GAME_IMAGE_WIDTH - LEFT_IMAGE_OFFSET)
+        add     hl,  bc
+        ex      hl, de
+        ld      c, a                            ; restore line counter
+
+        ld      a,  xl
+        cp      a, $15
+        jr      nz, left_next_mask
+
+        ld      xh, $7f
+        ld      xl, $2A
+
+        jr      start_copy_left_image_line
+
+left_next_mask:
+        ld      xh, $bf
+        ld      xl, $15
+
+        jr      start_copy_left_image_line
+
+left_image_finished:
+        ; draw right screen
+        ld      de, RIGHT_IMAGE_COORDINATES
+        ld      hl, (RIGHT_IMAGE_ADDRESS)
+
+        ld      xh, $7f
+        ld      xl, $2A
+
+        ld      c, GAME_IMAGE_HEIGHT
+
+start_copy_right_image_line:
+        ld      b, RIGHT_IMAGE_WIDTH
+
+copy_right_image_line:
+        ld      a, (hl)
+        and     xh
+        or      xl
+        ld      (de), a
+        inc     hl
+        inc     de
+        djnz    copy_right_image_line
+
+        dec     c
+        jr      z, right_image_finished
+
+        ld      a, c                            ; save line counter
+        ld      bc, GAME_IMAGE_WIDTH - RIGHT_IMAGE_WIDTH
+        add     hl, bc
+        ex      hl, de
+        ld      bc, SCREEN_WIDTH - RIGHT_IMAGE_WIDTH
+        add     hl,  bc
+        ex      hl, de
+        ld      c, a                            ; restore line counter
+
+        ld      a,  xl
+        cp      a, $15
+        jr      nz, right_next_mask
+
+        ld      xh, $7f
+        ld      xl, $2A
+
+        jr      start_copy_right_image_line
+
+right_next_mask:
+        ld      xh, $bf
+        ld      xl, $15
+
+        jr      start_copy_right_image_line
+
+right_image_finished:
+
+        ld      a, 5
+        call    SetCharColor
+
+        ld      a, 0
+        call    SetCharacterBackgroundColor        
+
+        ld      a, (IMAGE_INDEX)
+        ld      l, a
+        ld      a, (YEAR_DEC)
+        add     a, l
+        ld      l, a
+        ld      h, 0
+        ld      a, 0
+        ld      bc, $10e2
+        call    DrawNumber
+        ld      hl, RESULTS_END_STRING
+        ld      d, 255
+        call    DrawStr
+
+        ld      a, (IMAGE_COUNT)
+        ld      b, a
+        ld      a, (IMAGE_INDEX)
+        inc     a
+        cp      a, b
+        jr      c, index_ok
+
+        xor     a
+
+index_ok:
+        ; draw place number
+        ld      l, a
+        ld      a, (YEAR_DEC)
+        add     a, l
+        ld      l, a
+        ld      h, 0
+        ld      a, 0
+        ld      bc, $34e2
+        call    DrawNumber
+        ld      hl, RESULTS_END_STRING
+        ld      d, 255
+        call    DrawStr
+
+        ; draw game title
+        ld      a,(IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
+        ld      l, a
+        ld      h, 0
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+
+        ld      c, l
+        ld      b, h
+
+        add     hl, hl
+        add     hl, bc
+
+        ld      a, (IMAGE_INDEX)
+        ld      c, a
+        ld      b, 0
+        add     hl, bc
+        add     hl, bc
+
+        ld      bc, GamesInfo.Title
+        add     hl, bc
+        ld      bc, (COLLECTION)
+        add     hl, bc
+
+        ld      bc, $0141
+        ld      d, 32
+        call    DrawStr
+
+        call    set_paging_U0_U1_U2_SYS         ; restore paging
+
+        ret
+
+
+        ;---------------------------------------------------------------------
+        ; Gets the current GamesInfo struct address
+        ; Input:  DE - offset within the struct
+        ; Output: HL - address of the struct's member        
+GetCurrentGamesInfoAddress:
+        ld      a,(IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
+        ld      l, a
+        ld      h, 0
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+
+        ld      c, l
+        ld      b, h
+
+        add     hl, hl
+        add     hl, bc
+
+        ld      a, (IMAGE_INDEX)
+        ld      c, a
+        ld      b, 0
+        add     hl, bc
+        add     hl, bc
+
+        add     hl, de
+        ld      bc, (COLLECTION)
+        add     hl, bc
+
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Decompresses game screen into the given buffer
+        ; Input:  A - Game screen index
+        ;         DE - target buffer
+DecompressGameScreen:
+        ld      bc, GamesInfo
+        ld      hl, (COLLECTION)
+        or      a
+        jr      z, LDecompressNoMultiply
+
+LDecompressMultiply:
+        add     hl, bc
+        dec     a
+        jr      nz, LDecompressMultiply
+
+LDecompressNoMultiply:
+        ld      a, (hl)
+        inc     hl
+        ld      h, (hl)
+        ld      l, a
+        inc     hl                              ; skip size
+        inc     hl
+
+        call    set_paging_U0_U1_U2_U3
+ 
+        call    dzx7_turbo
+
+        call    set_paging_U0_U1_U2_SYS 
+
+        ret     
+
+PALETTE:
+        db      0, 0, 68, 65
+
+RESULTS_END_STRING:
+        db      "@", 0
+
+CARTRIDGE_STRING:
+        db      "CARTRIDGE",0
+
+FILENAME_VARIABLE:
+        db      "N$"
+
+SCROLL_TEXT:
+        db      "MEGAPLEX CARTRIDGE BY LASZLO ARVAI AND MIHALY SARANSZKI               "
+        db      "CONTAINS VIDEOTON TV COMPUTER GAME DEVELOPMENT COMPETITIONS 2019-2021"
+        db      "                               ", 0
+
+        include "chars.a80"
+        include "tvcfunctions.a80"
+        include "gamesinfo.a80"
+
+        include "resources.a80"

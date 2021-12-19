@@ -1,0 +1,623 @@
+
+;-----------------------------------------------------------------------------------------
+;	Karakter kirakó és szám konvertáló rutinok
+;-----------------------------------------------------------------------------------------
+				
+		;{	SetCharColor
+		;	'A': alsó 4 (0-3) bit color index, 4. bit ha 1, akkor maszkolva teszi ki a szöveget. 
+		;	Az 5. bitnek csak a maszkolt kirakásnál van jelentése: ha az 1-ben áll, akkor a szóköz fele szélességgel lesz kirakva
+CharColorTable:		
+        db	COLOR_BLACK*3
+        db	COLOR_DARKBLUE*3
+        db	COLOR_DARKRED*3
+        db	COLOR_DARKMAGENTA*3
+        db	COLOR_DARKGREEN*3
+        db	COLOR_DARKCYAN*3
+        db	COLOR_DARKYELLOW*3
+        db	COLOR_GRAY*3
+        db	COLOR_BLACK2*3
+        db	COLOR_BLUE*3
+        db	COLOR_RED*3
+        db	COLOR_MAGENTA*3
+        db	COLOR_GREEN*3
+        db	COLOR_CYAN*3
+        db	COLOR_YELLOW*3
+        db	COLOR_WHITE*3
+                        
+CharColorSave:		db	0
+CharBackgroundSave:     db      0
+
+
+SetCharacterBackgroundColor:
+        ld	(CharBackgroundSave),a          ; Save background color index
+
+        ld	b,a			        ; load color index into B
+        and	15			        ; only index
+                        
+        ld	hl,CharColorTable	        ; calculate color table address
+        ld	e,a
+        ld	d,0
+        add	hl,de
+                        
+        ld	a,(hl)			        ; load color code to A
+                        
+        ; store backgound color
+        ld	(CharBackgroundSave1+1),a
+        ld	(CharBackgroundSave2+1),a
+                        
+        ret
+
+                        
+SetCharColor:
+        ld	(CharColorSave),a	; Lementjük a szín indexet
+
+        ld	b,a			; 'B'-be kerül a szín index
+        and	15			; kimaszkoljuk az alsó 4 bitet, mert az indexet az írja le
+                        
+        ld	hl,CharColorTable	; Színtáblából kiválasztjuk a karakter színét ('E' regiszter)
+        ld	e,a			; 'DE' = 'A'
+        ld	d,0
+        add	hl,de			; 'HL'-hez hozzá adjuk a szín indexét, így 'HL' a táblázatban már az adott szín értékre mutat
+                        
+        ld	a,(hl)			; 'A'=színkód
+                        
+        ; A következo részben attól függoen, hogy maszoklt vagy felülíró karakter módot választottunk átírjuk a PutChar eljérás programkódjában a hivatkozásokat
+        bit	4,b
+        jr	nz,@MaskMode
+                        
+                        ; Felülíró karakter kirakónal.. 
+                        ld	(CharColorSave1+1),a	; Elobb a szineket helyettesítjük be a programkódba
+                        ld	(CharColorSave2+1),a
+                        
+                        ld	hl,PutCharOverwrite	; Majd a rutin belépo kódját az ugró vektorba
+                        ld	(PutCharModeJump+1),hl
+                        
+                        jr	@Exit
+@MaskMode		
+                        ; Maszkos karakter kirakónal.. 
+                        ld	(CharColorSaveMask1+1),a; Elobb a szineket helyettesítjük be a programkódba
+                        ld	(CharColorSaveMask2+1),a
+                        
+                        ld	hl,PutCharMask
+                        ld	(PutCharModeJump+1),hl	; Az ugróvektor most már a 'PutCharMask'-ra mutat
+@Exit			
+                        ret
+                        
+        ;}				
+                        
+        ;{ 	PutChar
+        ;	A: Character code
+        ;	B: X
+        ;	C: Y
+                        
+SpacePropFlg		db	0			; Ez a flag 0-nál nagyobb, ha maszkolt kirakást szeretnénk félhosszú space karakterrel
+                        
+PutChar							; Mivel a karakterek bitmap-je nem követi az asscii táblát - a nem használt karakterek képe nincs tárolva - ezért
+                                                        ; a karakter kód függvényében másként kell kezelnünk a számokat, az írásjeleket és a betuket
+                        
+                        cp	32			; Space kódja ?
+                        jr	nz,@jump0		; Nem! elore a további ellenorzésekhez!
+                        
+                        ; Space karakter
+                        ld	a,(CharColorSave)	; Levizsgáljuk, hogy maszkolt karakter kirakás van-e?
+                        bit	4,a
+                        jr	z,@jmpNotProp		; Ha nem maszkol, akkor tovább
+                        
+                        and	$20			; Csak a proportopnal bitet tartjuk meg
+                        ld	(SpacePropFlg),a
+                        ret				; Ha maszkos kirakás van, akkor nem rajzolunk semmit
+@jmpNotProp		
+        bit     5, a                    ; condensed space flag
+        jr      z, NormalSpace
+
+        ; condensed space
+        call    PosToVidmemAddress
+
+        ld      a, (CharBackgroundSave1+1)
+
+        ld      de, 64
+        ld      b, 5
+
+DrawSpaceLoop:        
+        ld      (hl), a
+        add     hl, de
+        djnz    DrawSpaceLoop
+
+        ld      a, $20			                ; flag for condensed space
+        ld	(SpacePropFlg),a        
+
+        ret
+
+NormalSpace
+        ld	de,Char_Space		; 'DE'-be a Space címe kerül
+                        
+                        jr	@RawAddrOk
+@jump0			
+                        cp	'+'			; '+'?
+                        jr	nz,@jump2		; Nem! elore a további ellenorzésekhez!
+                        ld	de,Char_Plus		; 'DE'-be a '+' címe kerül
+                        jr	@RawAddrOk
+@jump2			
+                        cp	'.'			; '.'?
+                        jr	nz,@jump3		; Nem! elore a további ellenorzésekhez!
+                        ld	de,Char_Dot		; 'DE'-be a '.' címe kerül
+                        jr	@RawAddrOk
+@jump3			
+                        cp	'@'
+                        jr	nz,@jump4
+                        ld	de,Char_Arrow
+                        jr	@RawAddrOk
+@jump4			
+                        cp	':'
+                        jr	nz,@jump5
+                        ld	de,Char_DotDot
+                        jr	@RawAddrOk
+
+@jump5			
+                        cp	'-'
+                        jr	nz,@jump6
+                        ld	de,Char_Minus
+                        jr	@RawAddrOk
+
+@jump6			
+                        cp	'!'
+                        jr	nz,@jump7
+                        ld	de,Char_Exclamation
+                        jr	@RawAddrOk
+
+@jump7			
+                        cp	'#'			; '#'? Ezzel jelöljük a tele négyzet karaktert a szövegben!!!
+                        jr	nz,@CheckNumberChar	; Nem! elore a további ellenorzésekhez!
+                        
+                        ld	de,Char_Squere		; 'DE'-be a tele négyzet karakter kerül
+                        jr	@RawAddrOk
+@CheckNumberChar	
+                        cp	'0'			; Ellenorizzük, hogy 'A'-ban levo kód szám-e?
+                        ret	c			; Ha 'A' kisebb mint a '0' karakter kódja, akkor nem rakjuk ki'
+                        cp	'9'+1
+                        jr	z,@jump1		; Ha a nagyobb, mint a '9' karakter, akkor már csak betu lehet
+                        jr	nc,@jump1		; Irány a betu mezo ellenorzése
+                        sub	'0'			; 'A'-ból kivonjuk a '0' karakter kódját, így 'A' már a számot tárolja ami megegyezik a karakter tábla elejétol szmított indexel
+                        jr	@CharDraw		; Kirajzoljuk az adott 
+@jump1			
+                        cp	'A'			; A kód nagyobb-e mint az 'A' kódja?
+                        ret	c			; ha kisebb, akkor nincs ilyen karakter letárolva, nem teszünk ki semmit
+                        sub	55			; Az 'A' karakter kódja 65. Mivel a karakter táblában eloször a 10 db szám van letárolva, és nekünk a karakter tábla indexére van szükségünk,
+                                                        ; esért kivonunk a kerakter értékbol 55. (Kivonunk belole 65-öt, hozzá adunk 10-et - a szám karakterek számát)
+@CharDraw		
+                        ld	h,0			; 'HL'= a karakter index immáron 16 bites formában, 'A' regiszter a karakter tábla indexe, ezt tesszük át 'HL'-be
+                        ld	l,a
+
+                        xor     a
+                        ld      (SpacePropFlg), a
+                        
+                        add	hl,hl			; 'HL'='HL'*10
+                        ld	d,h
+                        ld	e,l
+                        add	hl,hl
+                        add	hl,hl
+                        add	hl,de
+                        
+                        ld	de,CharacterTable	; 'DE' a legelso karakter adatra mutat
+                        add	hl,de			; 'HL' az adott karakter map-jére mutat
+                        ex	de,hl			; Most már 'DE' mutat az aktuális karakter map-jére
+@RawAddrOk:		
+                        call    PosToVidmemAddress
+                        
+PutCharModeJump		jp	PutCharOverwrite
+                        
+                        
+PutCharOverwrite	
+        ld	b,5			        ; one character is 5 line tall
+@Inner1:		
+        ld	a,(de)			        ; load first byte of the character row
+CharColorSave1:		
+        and	$ff			        ; apply color
+        ld      c, a                            ; save pixel color to c register
+
+        ld	a,(de)			        ; read again character data
+        xor     a, $ff                          ; change it to background mask
+CharBackgroundSave1:     
+        and     a, $00                          ; add background color
+        or      a, c                            ; combine background and foreground color
+                         
+        ld	(hl),a			        ; Store code in the screen memory
+
+        inc	de			        ; Next character byte
+        inc	hl
+                        
+        ld	a,(de)			        ; Character row second byte
+CharColorSave2:		
+        and	$ff			        ; apply color
+        ld      c, a                            ; save pixel color to c register
+
+        ld	a,(de)			        ; read again character data
+        xor     a, $ff                          ; change it to background mask
+CharBackgroundSave2:     
+        and     a, $00                          ; add background color
+        or      a, c                            ; combine background and foreground color
+                         
+        ld	(hl),a			        ; Store code in the screen memory
+
+        inc	de			        ; Next character byte
+
+                        
+                        ld	a,b			; A 'B'-ben tárolt ciklus változót elmentjük ideiglenesen 'A'-ba
+                        ld	bc,63
+                        add	hl,bc			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
+                        ld	b,a			; Az ideiglenesen elmentett ciklusváltozót vissza tesszük 'B'-be
+                        
+                        djnz	@Inner1
+                        
+                        ret
+                        
+PutCharMask		
+                        push	de
+                        pop	ix
+                        
+                        ld	b,5			; 5 sorból áll egy karakter
+@Inner2			
+                        ld	a,(ix+0)		; A karakter RAW sor elso byte-ja 'A'-ba kerül
+                        inc	ix			; 'DE' a következo címre lép
+                        
+CharColorSaveMask1	and	$ff			; 'A' ban levo raw érték átszínezése
+                        
+                        ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
+                        
+                        ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
+                        and	$aa			; 'A'-ban csak az elso pixel értéke kell!
+                        jp	z,@Skip1_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
+                        
+                        ; Elso pixel maszkolása
+                        ld	d,a			; 'D'-ben az elso pixel értéke
+                        ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
+                        and	$55			; Ebbol csak a 2. pixel értékei kellenek, az elso pixelhez tartozó biteket 0-ba kell álljtani
+                        or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+                        ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+@Skip1_1		
+                        ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
+                        and	$55			; 'A'-ban csak a második pixel értéke kell!
+                        jp	z,@Skip1_2		; A második pixel üres, nem kell további feldolgozás
+                        
+                        ; Második pixel maszkolása
+                        ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
+                        ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
+                        and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
+                        or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit 
+                        ld	e,a
+@Skip1_2		
+                        ; 'E' tartalmazza a háttérre maszkolt adatot
+                        ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat 
+                        inc	hl			; és növeljük a célpointer
+                        
+                        ; Hogy ne kelljen vízszintesen ciklus - mivel egy karakter mindösszesen 2 byte (4 pixel) széles, ezért megismételjük a fenti kódot
+                        ld	a,(ix+0)		; A karakter RAW sor második byte-ja 'A'-ba kerül
+                        inc	ix			; 'DE' a következo címre lép
+                        
+CharColorSaveMask2	and	$ff			; 'A' ban levo raw érték átszínezése
+                        
+                        ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
+                        
+                        ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
+                        and	$aa			; 'A'-ban csak az elso pixel értéke kell!
+                        jp	z,@Skip2_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
+                        
+                        ; Elso pixel maszkolása
+                        ld	d,a			; 'D'-ben az elso pixel értéke
+                        ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
+                        and	$55			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+                        or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+                        ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+@Skip2_1		
+                        ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
+                        and	$55			; 'A'-ban csak a második pixel értéke kell!
+                        jp	z,@Skip2_2		; A második pixel üres, nem kell további feldolgozás
+                        
+                        ; Második pixel maszkolása
+                        ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
+                        ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
+                        and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
+                        or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit 
+                        ld	e,a
+@Skip2_2		
+                        ; 'E' tartalmazza a háttérre maszkolt adatot
+                        ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat 
+                        
+                        ld	de,63
+                        add	hl,de			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
+                        
+                        djnz	@Inner2
+                        
+                        ret
+
+        ;---------------------------------------------------------------------
+        ; Calculates video memory address from coordinates
+        ; Input:  B - X 
+        ;         C - Y
+        ; Output: HL - address
+PosToVidmemAddress:
+        ld      l, c                    ; load Y coordinates
+        ld      h, 0
+        add     hl, hl                  ; y *64
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+        add     hl, hl
+
+        ld      c, b                    ; add x coordinate
+        ld      b, 0
+        add     hl, bc
+
+        ld	bc,VIDEOMEM	        ; add video memory address
+        add	hl,bc
+
+        ret  
+
+        ;}				
+                        
+        ;{	DrawStr, DrawColorStr
+        ; 	
+        ;	A  következo eláráshoz nem kell sok komment. Szépen kirakja a 'HL' által mutatott szöveget.
+        ;	A kirakási folyamat ciklikusan meghívja a PutChar metódust annyiszor, amennyit 'D'-ben megadunk, illetve, míg a bufferben nem talál záró 0 értéket
+        ; 	A szövegben található 13-as kódú 'Nev line' karaktert is figyelembe vesszük, hatására a szöveg kirakása új sorban folytatódik
+        ;
+        ; 	'HL': mutat a kiírandó szövegre
+        ;	'B': X
+        ;	'C': Y
+        ;	'D': kiírandó szöveg hossza
+@StoreStartPos		dw	0			; y,x
+                        
+;*	DrawColorStr		
+;*				ld	a,(hl)
+;*				inc	hl
+;*				call	SetCharColor
+DrawStr			
+                        ld	(@StoreStartPos),bc	; Lementjük a szöveg elején a szövek kezdo X,Y értékét, hogy esetlegesen az új sor kezdésekor rendelkezésre álljon
+@Inner			
+                        ld	a,(hl)			; 'A'-ba a buffer következo eleme
+                        inc	hl			; A buffer mutatóval a következo elemre állunk
+                        or	a			; Ha a kirakandó karakter 0, akkor végeztünk még akkor is, ha egyébként 'D'-ben leírt kirakási hosszt nem értük el
+                        ret	z
+                        
+                        cp	13			; 'New line' karakter??
+                        jr	nz,PutChar1		; Ha nem, akkor tovább a karakter kirajzolására
+                        
+                        ld	bc,(@StoreStartPos)	; Ha 'New line' karakter volt, akkor 'BC'-be visszatöltjük az elozo sor kezdo X,Y pontját
+                        ld	a,c			; 'A' = Y
+                        add	a,CHAR_HEIGHT		; 'A' = Y + karakter magassága
+                        ld	c,a			; 'C'-be vissza tesszük az új Y értéket
+                        ld	(@StoreStartPos),bc	; Majd az X,Y értéket - mint új sor elso pozícióját - újra letároljuk, ha késobb szükség lenne rá
+                        jr	@SkipChar
+PutChar1		
+                        push	hl			; Kirakjuk a karaktert
+                        push	de
+                        push	bc
+                        call	PutChar
+                        pop	bc
+                        pop	de
+                        pop	hl
+                        
+                        ; 'B' tárolja karakter X pozícióját. Egy karakter 2 byte széles. Most hozzá adunk 1-et v. 2-t annak a függvényében, hogy a 'SpacePropFlg' flag be van-e kapcsolva
+                        inc	b
+                        
+                        ld	a,(SpacePropFlg)	; Levizsgáljuk, hogy maszkolt karakter kirakás van-e?
+                        or	a
+                        jr	nz,@SkipChar
+                        
+                        inc	b
+@SkipChar		
+                        dec	d			; Csökkentjük 'D' értékét, 
+                        jp	nz,@Inner		; és ha még nem értünk az utolsó kirakandó karakterre, akkor vissza a ciklus elejére
+                        
+                        ret
+        ;}				
+                        
+        ;{	DrawNumber
+        ; 	HL: A kiírandó szám
+        ;	B: X
+        ;	C: Y
+        ;	A: A szám mezo szélessége. Ha A=0, akkor balra igazít különben jobbra
+DrawNumber		
+                        push	af			; 'A' mentése, mert a végén szükség lesz rá a jobbra igazításnál
+                        push	bc			; 'BC'-ben most az X,Y pozíció van, ezt azért kell menteni, mert erre meg majd a jobbra igazításnál és a szöveg kiírásnál lesz szükség
+                        
+                        ld	a,0			; 'HL' karakterekké konvertálása
+                        call	ConvertDecNum16
+                        ld	d,c			; Most már 'BC' a kiírandó szám hosszát mutatja (ez mindig kisebb 255-nél, tehát a 'C'-ben van a hossz), viszont a szöveg kiíráshoz 'D'-ben kell a hossz
+                        
+                        pop	bc			; Vissza töltjük 'BC'-be az X,Y pozíciót
+                        pop	af			; illeve 'A'-ba a szám mezo sélességét az igazításhoz
+                        
+                        or	a			; Ha 'A' 0, akkor nem kell igazítani csak simán kiírni a szám buffer tartalmát
+                        jr	z,@jump
+                        
+                        sub	d			; Jobbra igazítás: 'A' mutatja a szám mezo szélességét, 'D' pedig a konvertált szám hossza. 'A'-'B' megadja hány karakterrel kell arrébb tenni a kiírást
+                        ret	c			; Ha túl kicsi a megadott szám mezo hossz, akkor nincs kiírás
+                        
+                        add	a,a			; A jobbra tolás hosszát szorozzuk 2-vel (1 karakter szélessége byt-okban)
+                        add	a,b			; majd az X pozícióhoz ('B'-ben van) hozzá adjuk
+                        ld	b,a
+@jump			
+                        call	DrawStr			; Kiírjuk a szám buffer tartalmát
+                        ret
+                        
+
+NumRef			dw	10000,1000,100,10,0
+X10			db	0			; Tízszeres kijelzés - azaz 1db 0-t ír utána, ha ez nem 0.
+NumBfr			db	'0','0','0','0','0','0',0
+NumBfrEmpty		db	'0',0
+                        
+                        
+ConvertDecNum16		
+                        ld	a,'0'
+                        ld	(@modify+1),a
+                        
+                        ld	a,h			; 'A'-ba tesszük 'H' értékét, majd.
+                        or	l			; or-oljuk 'L'-lel
+                        jr	nz,@n7
+                                                        ; 'H' és 'L' értéke is 0 - azaz 'HL' = 0
+                        ld	hl,NumBfrEmpty		; 'HL'-el most már a 'NumBfrEmpty'-re mutatunk..
+                        jr	StrLen			; és kiírjuk a 0-t karakteresen
+@n7			
+                        ld	bc,NumBfr		; 'BC' fogja mutatni a számot jelképezo karakterlánc aktuális címét. Most a buffer elejére állítjuk
+                        ld	de,NumRef		; 'DE' viszont a referencia tábla elemét fogja mutatni, amivel aktuálisan össze kell hasonlítani 'HL' értékét
+@n2			
+                        push	bc
+                        
+                        ex	de,hl			; 'DE'-t és 'HL'-t megcseréljük, így a referencia érték tábla aktuális elemére most 'HL' mutat
+                        ld	c,(hl)			; 'BC'-be betöltjük a '(HL)' címen levo adatot, 'HL'-t pedig léptetjük a késobbiekhez a következo elemre
+                        inc	hl
+                        ld	b,(hl)
+                        inc	hl
+                        ex	de,hl			; 'HL'-t vissza rakjuk 'DE'-be
+                        
+                        ld	a,b			; A referencia - 'BC' - értéke 0?
+                        or	c
+                        jr	z,@n3			; Ha 0, akkor vége a ciklikus vizsgálatnak
+                        
+                        ld	a,'0'-1			; 'A'-ba a '0' karakter értékénél egyel kisebb értéket teszünk, hogy a következo INC A utasításra pont '0' kerüljön bele
+@n1			
+                        inc	a			; A következo ciklusban megszámoljuk, hogy 'HL'-bol hányszor tudjuk kivonni 'BC'-t azaz az adott tizes helyiértéken levo referenciát
+                        sbc	hl,bc
+                        jr	nc,@n1			; Ha 'HL' > 'BC', akkor még mindig lehet csökkenteni 'HL' értékét 'BC'-vel
+                        add	hl,bc			; 'Most már 'HL' kisebb, mint a referencia, a kivonás után tulcsordulás történt, ezért kompenzálásként hozzá adjuk 'HL'-hez 'BC'-t, így 'HL' az osztás maradéka lesz
+                        
+                        pop	bc			; 'BC'-be visszatesszük a buffer pountert
+                        
+@modify			cp	'0'			; Megnézzük, hogy a kapott karakter érték '0'-e?
+                        jr	z,@n2			; Ha '0', akkor vissz ugrunk a ciklus elejére, hogy kiértékeljük a következo tizedes helyiértéket
+                        
+                        ld	(bc),a			; A 'BC' által mutatott buffer pozícióba letesszük a karakter kódját
+                        inc	bc			; és növeljük a buffer pointer értékét
+                        
+                        xor	a
+                        ld	(@modify+1),a		; módosítjuk a "CP '0'" utasítást "CP 0"-ra
+                        jr	@n2			; vissza a következo helyiérték kiértékelésére
+@n3			
+                        pop	bc			; Vége a ciklusnak. Mivel a ciklus elso utasítában letettük a stack-be a 'BC' értékét, most vissza is tesszük ezt az értéket 'BC'-be
+                        
+                        ld	a,'0'			; 'L'-ben az utolsó helyiérték osztásából a maradék lapul..
+                        add	a,l			; ezért hozzá adjuk a '0' karakter értékét, ezzel megvan az utolsó helyiérték kódja
+                        ld	(bc),a			; ezt bele tesszük a buffer adott pozíciójára
+                        inc	bc			; majd növeljük a buffer mutató 'BC' értékét
+                        
+                        ld	a,(X10)			; Az 'X10' jelzés be van állítva?
+                        or	a
+                        jr	z,@n4			; A jelzés értéke 0, tehát nincs.. a következo részt kihagyjuk
+                        
+                        ld	a,'0'			; Az 'X10' jelzés be van állítva, a szám karakteresen leírt bufferében utána írunk még egy '0' karaktert
+                        ld	(bc),a
+                        inc	bc
+                        
+@n4			xor	a			; Vége a konverziónak, már csak a záró 0-t kell az utolsó buffer pozícióra kirakni
+                        ld	(bc),a
+@n5			
+                        ld	hl,NumBfr		; 'HL'-be betesszük a karakteresen ábrázolt számot leíró buffer kezdocímét
+                        
+                        ; Önállóan is hívható eljárás. 'HL' a szövegbuffer elejét tartalmazza. Eredmény: 'BC'-ben a 'HL' által mutatott 0 értékkel lezárt szöveg hossza		
+StrLen			push	hl
+                        ld	bc,0
+@n6			
+                        ld	a,(hl)
+                        or	a
+                        jr	z,@end
+                        inc	hl
+                        inc	bc
+                        jr	@n6
+@end			
+                        pop	hl
+                        ret
+
+
+        ;{ 	szín és grafikus mód konstansok
+        ; Palette színkódok Graphics 2 és Graphincs 4 módokban
+COLOR_BLACK		equ	0			; Graphics 16 esetén az értéke: 0
+COLOR_DARKBLUE		equ	1			; Graphics 16 esetén az értéke: 1
+COLOR_DARKRED		equ	4			; Graphics 16 esetén az értéke: 2                              
+COLOR_DARKMAGENTA	equ	5			; Graphics 16 esetén az értéke: 3
+COLOR_DARKGREEN		equ	16			; Graphics 16 esetén az értéke: 4
+COLOR_DARKCYAN		equ	17			; Graphics 16 esetén az értéke: 5
+COLOR_DARKYELLOW	equ	20			; Graphics 16 esetén az értéke: 6
+COLOR_GRAY		equ	21			; Graphics 16 esetén az értéke: 7
+COLOR_BLACK2		equ	64			; Graphics 16 esetén az értéke: 8
+COLOR_BLUE		equ	65			; Graphics 16 esetén az értéke: 9
+COLOR_RED		equ	68			; Graphics 16 esetén az értéke: 10
+COLOR_MAGENTA		equ	69			; Graphics 16 esetén az értéke: 11
+COLOR_GREEN		equ	80			; Graphics 16 esetén az értéke: 12
+COLOR_CYAN		equ	81			; Graphics 16 esetén az értéke: 13
+COLOR_YELLOW		equ	84			; Graphics 16 esetén az értéke: 14
+COLOR_WHITE		equ	85			; Graphics 16 esetén az értéke: 15          
+        ; Border színkódok (minden grafikus módban megegyeznek)
+BORDER_BLACK		equ	0
+BORDER_DARKBLUE		equ	2
+BORDER_DARKRED		equ	8
+BORDER_DARKMAGENTA	equ	10
+BORDER_DARKGREEN	equ	32
+BORDER_DARKCYAN		equ	34
+BORDER_DARKYELLOW	equ	40
+BORDER_GRAY		equ	42
+BORDER_BLACK2		equ	128
+BORDER_BLUE		equ	130
+BORDER_RED		equ	138
+BORDER_MAGENTA		equ	138
+BORDER_GREEN		equ	160
+BORDER_CYAN		equ	162
+BORDER_YELLOW		equ	168
+BORDER_WHITE		equ	170
+        ;}				
+                        
+                        
+        ;{	Character map 					
+CHAR_HEIGHT		equ	7
+                        
+CharacterCnt		db	40
+CharacterWidth		db	2
+CharacterHeight		db	5
+CharacterTable		
+Char_0			db	255,170,170,170,170,170,170,170,255,170
+Char_1			db	85,0,255,0,85,0,85,0,255,170
+Char_2			db	255,170,0,170,255,170,170,0,255,170
+Char_3			db	255,170,0,170,85,170,0,170,255,170
+Char_4			db	170,170,170,170,255,170,0,170,0,170
+Char_5			db	255,170,170,0,255,170,0,170,255,170
+Char_6			db	255,170,170,0,255,170,170,170,255,170
+Char_7			db	255,170,170,170,0,170,0,170,0,170
+Char_8			db	255,170,170,170,255,170,170,170,255,170
+Char_9			db	255,170,170,170,255,170,0,170,255,170
+Char_A			db	255,170,170,170,255,170,170,170,170,170
+Char_B			db	255,170,170,170,255,0,170,170,255,170
+Char_C			db	255,170,170,170,170,0,170,170,255,170
+Char_D			db	255,0,170,170,170,170,170,170,255,170
+Char_E			db	255,170,170,0,255,0,170,0,255,170
+Char_F			db	255,170,170,0,255,0,170,0,170,0
+Char_G			db	255,170,170,0,170,170,170,170,255,170
+Char_H			db	170,170,170,170,255,170,170,170,170,170
+Char_I			db	255,170,85,0,85,0,85,0,255,170
+Char_J			db	255,170,0,170,0,170,170,170,255,0
+Char_K			db	170,170,170,170,255,0,170,170,170,170
+Char_L			db	170,0,170,0,170,0,170,0,255,170
+Char_M			db	170,170,255,170,170,170,170,170,170,170
+Char_N			db	255,170,170,170,170,170,170,170,170,170
+Char_O			db	255,170,170,170,170,170,170,170,255,170
+Char_P			db	255,170,170,170,170,170,255,170,170,0
+Char_Q			db	255,170,170,170,170,170,255,170,0,170
+Char_R			db	255,170,170,170,170,170,255,0,170,170
+Char_S			db	255,170,170,0,255,170,0,170,255,170
+Char_T			db	255,170,85,0,85,0,85,0,85,0
+Char_U			db	170,170,170,170,170,170,170,170,255,170
+Char_V			db	170,170,170,170,170,170,170,170,255,0
+Char_W			db	170,170,170,170,170,170,255,170,170,170
+Char_X			db	170,170,170,170,85,0,170,170,170,170
+Char_Y			db	170,170,170,170,255,170,85,0,85,0
+Char_Z			db	255,170,0,170,255,170,170,0,255,170
+Char_Squere		db	255,170,255,170,255,170,255,170,255,170
+Char_Space		db	0,0,0,0,0,0,0,0,0,0
+Char_Plus		db	0,0,85,0,255,170,85,0,0,0
+Char_Dot		db	0,0,0,0,0,0,0,0,85,0
+Char_DotDot		db	0,0,85,0,0,0,85,0,0,0
+Char_Arrow		db	170,0,255,0,255,170,255,0,170,0
+Char_Exclamation        db	85,0,85,0,85,0,0,0,85,0
+Char_Minus              db      0,0,0,0,255,0,0,0,0,0
+;}			
+                        

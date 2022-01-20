@@ -8,7 +8,7 @@ File    text 16, {0}
 Count           byte 0
 Index           byte 0
 Year            text 7, {0}
-YearDec         db 0
+YearDec         dw 0
 Collection      word  
         ends
 
@@ -32,7 +32,7 @@ games_info2019:
         GamesInfo {
         crossfire
         {"    KOLLAR ZOLTAN: CROSSFIRE   "}
-        {"CROSSFIRE.CAS"}
+        {"CROSSFIR.CAS"}
         }                  
         GamesInfo {
         gombocfalo
@@ -99,7 +99,7 @@ games_info2021:
         GamesInfo {
         bomberman
         {"      BERYSOFT: BOMBERMAN      "}
-        {"BOMBER.CAS"}
+        {"BOMBMAN.CAS"}
         }   
         GamesInfo {
         nebulus
@@ -112,10 +112,10 @@ games_info2021:
         {"TL.CAS"}
         }     
         GamesInfo {
-        raster_runner
-        {"   PERZSA NOEL: RASTER RUNNER  "}
-        {"RASTER.CAS"}
-        }    
+        sotet_kastely
+        {"  OROSZ OLIVER: SOTET KASTELY  "}
+        {"SOTETKAS.CAS"}
+        }   
         GamesInfo {
         gunfright
         {"     PERZSA NOEL: GUNFRIGHT    "}
@@ -127,15 +127,31 @@ games_info2021:
         {"MPSOCCER.CAS"}
         }                  
         GamesInfo {
-        sotet_kastely
-        {"  OROSZ OLIVER: SOTET KASTELY  "}
-        {"SOTETKAS.CAS"}
-        }                 
+        snake
+        {"      VASS SANDOR: SNAKES      "}
+        {"SNAKES.CAS"}
+        }               
         GamesInfo {
         red_october
         {"HP: VADASZAT A VOROS OKTOBERREL"}
         {"VOROSOKT.CAS"}
-        }                  
+        }  
+        GamesInfo {
+        tankwars
+        {"    ELOD E. IMRE: TANK WARS    "}
+        {"TANKWARS.CAS"}
+        }     
+        GamesInfo {
+        raster_runner
+        {"   PERZSA NOEL: RASTER RUNNER  "}
+        {"RASTER.CAS"}
+        }    
+        GamesInfo {
+        fogo
+        {"      OROSZ OLIVER: FOGO       "}
+        {"FOGO2021.CAS"}
+        } 
+              
 
 
 GAMES_COLLECTION:
@@ -143,21 +159,21 @@ GAMES_COLLECTION:
         6
         0
         { " 2019 "}
-        191
+        1901
         games_info2019
         }
         GamesCollection {
         8
         0
         { " 2020 "}
-        201
+        2001
         games_info2020
         }
         GamesCollection {
-        9
+        12
         0
         { " 2021 "}
-        211
+        2101
         games_info2021
         }
         GamesCollection {

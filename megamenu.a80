@@ -10,14 +10,14 @@
 
 
         ; BASIC SYMBOL TABLE
-        ds      38                      
+        ds      38                              ; Storage for BASIC symbol table                  
 
         ; Program start
         jr      START
 
         ; ** Variables **
 
-IX_SAVE dw      0
+IX_SAVE dw      0                               ; Saves IX, and IY registers because it is used by the basic
 IY_SAVE dw      0
 
 COLLECTION_INDEX        db      0
@@ -25,12 +25,13 @@ COLLECTION_COUNT        db      0
 
 IMAGE_INDEX             db      0
 IMAGE_COUNT             db      6
-YEAR_DEC                db      0
+YEAR_DEC                dw      0
 COLLECTION              dw      0
 SCROLL_TEXT_DELAY       db      0
 SCROLL_PHASE            db      0
 SCROLL_CHARACTER        dw      0
 
+        ; Image buffer addresses
 LEFT_IMAGE_ADDRESS:
         dw      IMAGE_BUFFER0
 
@@ -42,15 +43,16 @@ RIGHT_IMAGE_ADDRESS:
 
         ; ** Program start **
 START:
+        ; save IX, IY
         ld      (IX_SAVE), ix
         ld      (IY_SAVE), iy
 
         ; set video mode to 16 color
-        ld      c,2
+        ld      c, 2
         rst     30h
         db      $04
 
-        ; set CRTC interrupr position to the original value
+        ; set CRTC interrupt position to the original value (floppy controller might change it)
         ld      a, 14           
         out     (CRTC_ADDRESS), a
         ld      a, $0e
@@ -68,7 +70,7 @@ START:
         ; show main screen
         call    set_paging_U0_U1_VID_SYS        ; page in video memory
 
-        ld      hl, megaplex+2                  ; show main screen
+        ld      hl, megaplex+2                  ; decompress main screen
         ld      de, VIDEOMEM
         call    dzx7_turbo
 
@@ -104,27 +106,28 @@ START:
         call    SetCharacterBackgroundColor
 
         ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
-        ld      a, ' '
+        ld      a, ' '                          ; Start scrolling with a space
         call    PutChar                         
 
-        call    set_paging_U0_U1_U2_SYS        ; restore paging
+        call    set_paging_U0_U1_U2_SYS         ; restore paging
 
-        ld      a, 0
+        ld      a, 0                            ; init scroll variables
         ld      (SCROLL_PHASE), a
         ld      hl, SCROLL_TEXT
         ld      (SCROLL_CHARACTER), hl
 
+        ; waits for user's keyboard input
 WaitForKey:
-        rst     30h
+        rst     30h                             ; read keyboard status
         db      KBD_STATUS
         ld      a, c
         cp      a, $ff
-        jr      nz, ScrollText
+        jr      nz, ScrollText                  ; if no key pressed only scroll the text
 
-        rst     30h
+        rst     30h                             ; when key is pressed
         db      KBD_CHIN
 
-        ld      a, c
+        ld      a, c                            ; check for joystick key
         cp      JOY_LEFT
         jp      z, move_left
 
@@ -137,19 +140,20 @@ WaitForKey:
         cp      JOY_DOWN
         jp      z, MoveDown
 
-        cp      JOY_FIRE
+        cp      JOY_FIRE                        ; Start program 
         jp      z, RunProgram
 
         cp      RETURN
         jp      z, RunProgram
 
+        ; text scrolling routine
 ScrollText:
         ld      a, (SCROLL_TEXT_DELAY)
         dec     a
         ld      (SCROLL_TEXT_DELAY), a
         jr      nz, WaitForKey
 
-        ld      a, 160
+        ld      a, 80
         ld      (SCROLL_TEXT_DELAY), a
 
         call    LeftScroll
@@ -184,7 +188,7 @@ LeftScroll:
         jr      nz, LeftScrollNoStringEnd
 
         ld      hl, SCROLL_TEXT                 ; restart from the first character
-        ld      a,(hl)
+        ld      a, (hl)
         inc     hl
 
 LeftScrollNoStringEnd:
@@ -277,7 +281,7 @@ ReturnToBasic:
         ld      (BORDER), a
 
         ; set video mode to 4 color
-        ld      c,1
+        ld      c, 1
         rst     30h
         db      VMODE
 
@@ -423,7 +427,7 @@ move_left_2:
 DrawMenu:
         call    set_paging_U0_U1_VID_SYS        ; page in video memory
 
-        ld      a, 0
+        ld      a, 0                            ; Count menu items while drawing
         ld      (COLLECTION_COUNT), a
         ld      iy, GAMES_COLLECTION
 
@@ -451,6 +455,9 @@ LMenuNextItem:
 
         ld      a, (IY+GamesCollection.YearDec)
         ld      (YEAR_DEC), a
+
+        ld      a, (IY+GamesCollection.YearDec+1)
+        ld      (YEAR_DEC+1), a
 
         ld      a, (IY+GamesCollection.Collection)
         ld      (COLLECTION), a
@@ -578,18 +585,39 @@ InitCarousel:
         ld      hl, IMAGE_BUFFER2
         ld      (RIGHT_IMAGE_ADDRESS), hl
 
-        ; load screens
-        ld      a, (IMAGE_COUNT)                ; left screen
+        ; ** load screens
+        
+        ; left screen
+        ld      a, (IMAGE_COUNT)
+        ld      b, a
+        ld      a, (IMAGE_INDEX)                
         dec     a
+        cp      a, b                            ; check for index underrun
+        jr      c, ICLeftImageIndexOk
+
+        ld      a, b                            ; load image count - 1
+        dec     a 
+
+ICLeftImageIndexOk:        
         ld      de, (LEFT_IMAGE_ADDRESS)
         call    DecompressGameScreen
 
-        ld      a, (IMAGE_INDEX)                ; center screen
+        ; center screen
+        ld      a, (IMAGE_INDEX)                
         ld      de, (CENTER_IMAGE_ADDRESS)
         call    DecompressGameScreen
 
-        ld      a, (IMAGE_INDEX)                ; right screen
+        ; right screen
+        ld      a, (IMAGE_COUNT)
+        ld      b, a
+        ld      a, (IMAGE_INDEX)                
         inc     a
+        cp      a, b
+        jr      c, ICRightIndexOk
+
+        xor     a, a                            ; load first image
+
+ICRightIndexOk:        
         ld      de, (RIGHT_IMAGE_ADDRESS)
         call    DecompressGameScreen
 
@@ -651,12 +679,12 @@ copy_left_image_line:
         ld      bc, LEFT_IMAGE_OFFSET
         add     hl, bc
         ex      hl, de
-        ld      bc, SCREEN_WIDTH -(GAME_IMAGE_WIDTH - LEFT_IMAGE_OFFSET)
-        add     hl,  bc
+        ld      bc, SCREEN_WIDTH - (GAME_IMAGE_WIDTH - LEFT_IMAGE_OFFSET)
+        add     hl ,  bc
         ex      hl, de
         ld      c, a                            ; restore line counter
 
-        ld      a,  xl
+        ld      a ,  xl
         cp      a, $15
         jr      nz, left_next_mask
 
@@ -701,7 +729,7 @@ copy_right_image_line:
         add     hl, bc
         ex      hl, de
         ld      bc, SCREEN_WIDTH - RIGHT_IMAGE_WIDTH
-        add     hl,  bc
+        add     hl ,  bc
         ex      hl, de
         ld      c, a                            ; restore line counter
 
@@ -730,15 +758,16 @@ right_image_finished:
 
         ld      a, (IMAGE_INDEX)
         ld      l, a
+        ld      a, (YEAR_DEC+1)
+        ld      h, a
         ld      a, (YEAR_DEC)
         add     a, l
         ld      l, a
-        ld      h, 0
         ld      a, 0
         ld      bc, $10e2
         call    DrawNumber
         ld      hl, RESULTS_END_STRING
-        ld      d, 255
+        ld      d, 1
         call    DrawStr
 
         ld      a, (IMAGE_COUNT)
@@ -753,10 +782,11 @@ right_image_finished:
 index_ok:
         ; draw place number
         ld      l, a
+        ld      a, (YEAR_DEC+1)
+        ld      h, a
         ld      a, (YEAR_DEC)
         add     a, l
         ld      l, a
-        ld      h, 0
         ld      a, 0
         ld      bc, $34e2
         call    DrawNumber
@@ -765,7 +795,7 @@ index_ok:
         call    DrawStr
 
         ; draw game title
-        ld      a,(IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
+        ld      a, (IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
         ld      l, a
         ld      h, 0
         add     hl, hl
@@ -804,7 +834,7 @@ index_ok:
         ; Input:  DE - offset within the struct
         ; Output: HL - address of the struct's member        
 GetCurrentGamesInfoAddress:
-        ld      a,(IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
+        ld      a, (IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
         ld      l, a
         ld      h, 0
         add     hl, hl
@@ -868,15 +898,48 @@ RESULTS_END_STRING:
         db      "@", 0
 
 CARTRIDGE_STRING:
-        db      "CARTRIDGE",0
+        db      "CARTRIDGE", 0
 
 FILENAME_VARIABLE:
         db      "N$"
 
 SCROLL_TEXT:
-        db      "MEGAPLEX CARTRIDGE BY LASZLO ARVAI AND MIHALY SARANSZKI               "
-        db      "CONTAINS VIDEOTON TV COMPUTER GAME DEVELOPMENT COMPETITIONS 2019-2021"
-        db      "                               ", 0
+        db      "MEGAPLEX CARTRIDGE BY LASZLO ARVAI AND MIHALY SARANSZKI          "
+        db      "CONTAINS VIDEOTON TV COMPUTER GAME DEVELOPMENT COMPETITIONS 2019-2021          "
+	db      "JOYSTICK UP/DOWN: SELECT YEAR     JOYSTICK LEFT/RIGHT: SELECT GAME     FIRE/RETURN: START GAME     "
+	db      "2019 GAMES: 1.IK+     2.FUSS!     3.DONKEY KONG JR.     4.CROSSFIRE     "
+	db      "5.GOMBOCFALO     6.FILLER          "
+
+	db      "2020 GAMES: 1.PUCKMAN     2.IKARI WARRIORS     3.RENEGADE     4.QUADRILLION     "
+	db      "5.VOTE2020     6.XORGAME     7.BOMBER     8.MULTITETRIS          "
+
+	db      "2021 GAMES: 1.IMPOSSIBLE MISSION     2.BOMBERMAN MEGABLAST     3.NEBULUS     "
+	db      "4.LODE RUNNER     5.SOTET KASTELY     6.GUNFRIGHT     7.MICROPROSE SOCCER     "
+	db      "8.TVC4SNAKES     9.VADASZAT A VOROS OKTOBERREL     10.TANK WARS     "
+	db      "11.RASTER RUNNER     12.FOGO          "
+
+	db      "THANKS TO ATTILA GROSZ , ISTVAN VARGA , GYORGY VINCE BELA , KEVIN THECKER , "
+	db      "SANDOR VASS , KRISZTIAN MARTA , KAROLY KISS , ZSOLT MARI , TAMAS MAJOR"
+        db      "          "
+
+	db      "GREETINGS TO GABOR SZAKACS , ATTILA ABONYI , ATTILA MIKLAN , KAROLY NAGY , "
+	db      "GABOR FORRAI , BALAZS VASVARI , ZSOLT VARADY , JARL FREY , PETER FOLDESI , "
+	db      "TAMAS LENHARDT , ANDRAS KOVER , GERGELY SZELEI , TAMAS BEREGI , ZSOLT PRIEVARA , "
+	db      "GABOR STOCKERT , CSABA NAGY , ZOLTAN NEMETH , JOZSEF LUKACS , NORBERT DOMJAN , "
+	db      "IMRE EGRI , LEVENTE HARSFALVI , SZERGELY BUTOV , OLIVER OROSZ , ZOLTAN GUGI , "
+	db      "PETER GYONGYOSSY , GABOR MAJOR , ZSOLT MOLNAR , ZOLTAN MOLNAR , KRISZTIAN MAKAI , "
+	db      "LASZLO BUZA , TAMAS KALMAN , ZSOLT KARPATI , ISTVAN SARANSZKI , ATTILA SZABO , "
+	db	"GABOR FEHER , ATTILA VASS , ZOLTAN HOLLOSY , "
+        db      "ATTILA LOSONCZI , JOSEF TRENCSENYI , ERNO ZALKA , EVA KRAVLICS , BENCE BORDAS , "
+        db      "IMRE TANACS , GABOR ORVOS , IMRE E. ELOD , PETER BREUER , ROMEO REIDL , TAMAS BESZEDA , "
+        db      "CSABA LASZLO BACSKAY , OSZVALD BALAZS , ZOLTAN J FEHER , JANOS KISTAMAS , TAMAS BODNAR , SZILARD MATUSIK"
+        db      "          "
+        
+        db      "SPECIAL THANKS TO ZSOLT BERTOK FOR ORGANIZING SUCH AN EXCITING COMPETITION          "
+
+        db      "MEGAPLEX IS MADE BY USING DEVTOOL , VISUAL STUDIO CODE , SJASM , YATE          MADE IN HUNGARY 2021"
+
+        db      "                               ", 0 
 
         include "chars.a80"
         include "tvcfunctions.a80"

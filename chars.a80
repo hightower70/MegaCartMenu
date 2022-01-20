@@ -166,6 +166,18 @@ NormalSpace
                         jr	@RawAddrOk
 
 @jump7			
+                        cp	','
+                        jr	nz,@jump8
+                        ld	de,Char_Comma
+                        jr	@RawAddrOk
+
+@jump8			
+                        cp	'/'
+                        jr	nz,@jump9
+                        ld	de,Char_Slash
+                        jr	@RawAddrOk
+
+@jump9
                         cp	'#'			; '#'? Ezzel jelöljük a tele négyzet karaktert a szövegben!!!
                         jr	nz,@CheckNumberChar	; Nem! elore a további ellenorzésekhez!
                         
@@ -615,6 +627,9 @@ Char_Squere		db	255,170,255,170,255,170,255,170,255,170
 Char_Space		db	0,0,0,0,0,0,0,0,0,0
 Char_Plus		db	0,0,85,0,255,170,85,0,0,0
 Char_Dot		db	0,0,0,0,0,0,0,0,85,0
+Char_Comma		db	0,0,85,0,170,170,85,0,0,0
+;Char_Comma		db	0,0,0,0,0,0,85,0,170,0
+Char_Slash		db	0,0,0,170,85,0,170,0,0,0
 Char_DotDot		db	0,0,85,0,0,0,85,0,0,0
 Char_Arrow		db	170,0,255,0,255,170,255,0,170,0
 Char_Exclamation        db	85,0,85,0,85,0,0,0,85,0

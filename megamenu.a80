@@ -17,8 +17,12 @@
 
         ; ** Variables **
 
-IX_SAVE dw      0                               ; Saves IX, and IY registers because it is used by the basic
-IY_SAVE dw      0
+IX_SAVE  dw     0                               ; Saves IX, and IY registers and shadow registers because it is used by the basic
+IY_SAVE  dw     0
+BCS_SAVE dw     0
+DES_SAVE dw     0
+HLS_SAVE dw     0
+
 
 COLLECTION_INDEX        db      0
 COLLECTION_COUNT        db      0
@@ -46,6 +50,13 @@ START:
         ; save IX, IY
         ld      (IX_SAVE), ix
         ld      (IY_SAVE), iy
+
+        ; save some shadow registers
+        exx
+        ld      (BCS_SAVE), bc
+        ld      (DES_SAVE), de
+        ld      (HLS_SAVE), hl
+        exx
 
         ; set video mode to 16 color
         ld      c, 2
@@ -118,11 +129,25 @@ START:
 
         ; waits for user's keyboard input
 WaitForKey:
+        halt                                    ; wait for interrupt (and keyboard scan)
+
+        ld      a, (SCROLL_TEXT_DELAY)          ; Handle scroll delay
+        inc     a                               ; increment delay counter
+        ld      (SCROLL_TEXT_DELAY), a
+        cp      a, SCROLL_DELAY
+        jr      c, ReadKeyboardStatus
+
+        xor     a                               ; reset delay counter
+        ld      (SCROLL_TEXT_DELAY), a
+        
+        call    LeftScroll                      ; scroll text
+        
+ReadKeyboardStatus:
         rst     30h                             ; read keyboard status
         db      KBD_STATUS
         ld      a, c
         cp      a, $ff
-        jr      nz, ScrollText                  ; if no key pressed only scroll the text
+        jr      nz, WaitForKey                  ; if no key pressed -> wait
 
         rst     30h                             ; when key is pressed
         db      KBD_CHIN
@@ -146,23 +171,9 @@ WaitForKey:
         cp      RETURN
         jp      z, RunProgram
 
-        ; text scrolling routine
-ScrollText:
-        ld      a, (SCROLL_TEXT_DELAY)
-        dec     a
-        ld      (SCROLL_TEXT_DELAY), a
-        jr      nz, WaitForKey
-
-        ld      a, 80
-        ld      (SCROLL_TEXT_DELAY), a
-
-        call    LeftScroll
-
         jr      WaitForKey
 
 LeftScroll:
-        halt
-
         call    set_paging_U0_U1_VID_SYS        ; page in video memory
 
         ld      a, (SCROLL_PHASE)               ; update scroll phase (scroll position within character)
@@ -269,12 +280,19 @@ LeftScrollPixel:
         call    set_paging_U0_U1_U2_SYS        ; restore paging
 
         ret
-         
-
 
 ReturnToBasic:
-        ld      ix, (IX_SAVE)
-        ld      iy, (IY_SAVE)
+        ; Clear U3 RAM
+        call    set_paging_U0_U1_U2_U3
+        
+        xor     a
+        ld      hl, U3_ADDRESS
+        ld      de, U3_ADDRESS + 1
+        ld      bc, U3_SIZE - 2
+        ld      (hl), a
+        ldir
+
+        call    set_paging_U0_U1_U2_SYS 
 
         ; set border color to black
         ld      a, $00
@@ -294,10 +312,21 @@ ReturnToBasic:
         ld      (PAPER), a
 
         ; set first ink, paper palette color to black
-        ld      de, PALETTE
+        ld      de, HIDE_PALETTE
         rst     30h
         db      PAL
-         
+
+        ; restore some shadow registers
+        exx
+        ld      bc, (BCS_SAVE)
+        ld      de, (DES_SAVE)
+        ld      hl, (HLS_SAVE)
+        exx
+
+        ; restore IX, IY
+        ld      ix, (IX_SAVE)
+        ld      iy, (IY_SAVE)
+
         ret     
 
         ;---------------------------------------------------------------------
@@ -436,7 +465,7 @@ LNextMenuItem:
         or      a
         jr      nz, LMenuNextItem
 
-        call    set_paging_U0_U1_U2_SYS        ; restore paging
+        call    set_paging_U0_U1_U2_SYS         ; restore paging
         ret
 
 LMenuNextItem:
@@ -891,7 +920,7 @@ LDecompressNoMultiply:
 
         ret     
 
-PALETTE:
+HIDE_PALETTE:
         db      0, 0, 68, 65
 
 RESULTS_END_STRING:
@@ -930,7 +959,7 @@ SCROLL_TEXT:
 	db      "PETER GYONGYOSSY , GABOR MAJOR , ZSOLT MOLNAR , ZOLTAN MOLNAR , KRISZTIAN MAKAI , "
 	db      "LASZLO BUZA , TAMAS KALMAN , ZSOLT KARPATI , ISTVAN SARANSZKI , ATTILA SZABO , "
 	db	"GABOR FEHER , ATTILA VASS , ZOLTAN HOLLOSY , "
-        db      "ATTILA LOSONCZI , JOSEF TRENCSENYI , ERNO ZALKA , EVA KRAVLICS , BENCE BORDAS , "
+        db      "ATTILA LOSONCZI , JOZSEF TRENCSENYI , ERNO ZALKA , EVA KRAVLICS , BENCE BORDAS , "
         db      "IMRE TANACS , GABOR ORVOS , IMRE E. ELOD , PETER BREUER , ROMEO REIDL , TAMAS BESZEDA , "
         db      "CSABA LASZLO BACSKAY , OSZVALD BALAZS , ZOLTAN J FEHER , JANOS KISTAMAS , TAMAS BODNAR , SZILARD MATUSIK"
         db      "          "

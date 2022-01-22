@@ -1,2 +1,4 @@
-@del megamenu.cas
-@tvctape megamenu.bin megamenu.cas -a 1
+@del START.CAS
+@tvctape megamenu.bin START.CAS -a 1
+
+

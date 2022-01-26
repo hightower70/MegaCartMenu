@@ -1,0 +1,877 @@
+SndCardNone             equ     0       ; No sound card detected
+SndCardGame             equ     1       ; Game card
+SndCardSndMx            equ     2       ; Sound Magix card
+
+GameCardControlPort     equ     $0f     ; Control port address on game card
+GameCardClockEnable     equ     8+7     ; Clock enable signal on game card
+GameCardClockDisable    equ     7       ; Clock disable signal on game card
+SndChannelCount         equ     4       ; Number of channels on SN chip
+
+SndCardBaseAddr		db	0       ; Sound card base address
+SndCardType		db	0       ; Type if the sound card
+                        
+DetectGameStr		db	6,'JOY+SN'
+DetectMultiStr		db	5,'SndMx'
+				
+
+SndCardDetectAddr	dw	0
+
+EMPTY_SOUND		equ	72
+MUTE_SOUND		equ	73
+        
+MUSIC_TEMPO       	equ	6
+;MUSIC_MIXER		equ	1
+        
+;MP_MixerCounter		db	MUSIC_MIXER
+        
+        ; Az MP_Flag bitjeinek felépítése:
+        ; A 0. bit engedélyezi a zene lejátszást - pontosabban a mixer muködését - a játékon belül.
+        ; A 1. bit engedélyezi a hangeffektek lejátszását a játékon belül
+        ; A 2. bit jelzi, ha hangeffekt szól
+        ; A 6. bit engedélyezi a track léptetést, ha 1-be van állítva
+        ; A 7. bit jelzi melyik csatorna szól a mixerben
+        
+        struct	MCHAN
+TrackSize       byte 0
+TrackPtr        byte 0
+TrackAddr       dw 0
+PatternPtr      dw 0
+PatternSize     db 0
+PatternSizeCnt  db 0
+PatternDelay    db 0
+Pitch           dw 0
+Volume          db 0
+EnvelopePtr     dw 0
+        ends
+
+AddrFreqTable		dw	0
+        
+;AddrPatternOffs		dw	0
+;AddrPatterns		dw	0
+;EnvelopesNr		db	0
+MP_Flag			db	0
+MP_TempoCounter		db	0
+;MP_BaseCounter		db	0
+        
+Channels:		
+ChannelA		ds	MCHAN
+ChannelB		ds	MCHAN
+ChannelC		ds	MCHAN
+ChannelD		ds	MCHAN
+        
+;SoundEffectPtr		dw	0			; Az effekt lejátszás pointere ill. vége címe.  Ez a két változó nem felcserélheto!!!!
+;SoundEffectEndPtr	dw	0
+        
+        
+        struct	MHEAD
+ChannelNr        db 0
+TrackSize        db 0
+PatternSize      db 0
+CardFlag         db 0
+PatternOffs      dw 0
+InstrumentOffs   dw 0
+        ends
+        
+FREQ_TABLE_SIZE		equ	72
+        
+ConvertedFreqTable	ds	FREQ_TABLE_SIZE*2
+
+       
+        ;---------------------------------------------------------------------
+        ; Detect sound card type
+DetectSndCard:		
+        ld	hl, SndCardType                 ; Init detected card type
+        ld	(hl), SndCardNone
+        
+        ld	de, DetectGameStr               ; Detect game card
+        call	DetectSndCardString
+        
+        ld	a, (SndCardBaseAddr)            ; if detection is not success -> detect Multi Sound
+        or	a
+        jr	z, DetectMultiSound
+        
+        ld      a, SndCardGame                  ; Detection success -> store card type
+        ld	(SndCardType), a
+
+        ld	a, (SndCardBaseAddr)            ; if detection is not success -> detect Multi Sound
+        add     a, GameCardControlPort
+        ld      c, a
+        ld      a, GameCardClockEnable
+        out     (c), a
+
+        call    SndInitChip
+         
+        ret
+
+DetectMultiSound	
+        ld	de, DetectMultiStr              ; Multi Sound string
+        call	DetectSndCardString             ; detect
+        
+        ld	a, (SndCardBaseAddr)            ; return is no card found
+        or	a
+        ret	z
+        
+        ld      a, SndCardSndMx                 ; Detection success -> store card type
+        ld	(SndCardType), a
+
+        call    SndInitChip
+
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Initialize sound chip
+SndInitChip:
+        ld	a, (SndCardBaseAddr)            ; Init card
+        ld	c, a                             
+        ld	b, SndChannelCount
+        ld	a, 128+16+15
+
+SndInitChipLoop:		
+        out	(c),a
+        
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        add	a,32
+        djnz	SndInitChipLoop
+        
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Detect sound card type string
+        ; Input:  DE - Detection string pointer
+DetectSndCardString:
+        ld      a, (de)                         ; load name length
+        inc     a
+        ld      b, a
+
+        xor	a
+        ld	(SndCardBaseAddr), a
+        
+        ld	hl, $40
+        ld	(SndCardDetectAddr),hl
+        
+        ld	c, 1			        ; 'C' is the slot number
+DetectSndCardStringInnerLoop:
+        ld	hl, (SndCardDetectAddr)
+        
+DetectSndCardStringInnerCmp:
+        ld	a, (de)
+        cp	(hl)
+        jr	nz, DetectSndCardStringNotFound
+        inc	de
+        inc	hl
+        djnz	DetectSndCardStringInnerCmp
+
+DetectSndCardStrinFound
+        ld	a, c
+        
+        add	a, a
+        add	a, a
+        add	a, a
+        add	a, a
+        
+        ld	(SndCardBaseAddr), a
+        ret
+
+DetectSndCardStringNotFound:
+        inc	c			        ; Increment slot number
+        ld	a, c
+        cp	5
+        ret	z			        ; If slot number is 5 -> card not found
+        
+        push	bc
+        ld	hl, (SndCardDetectAddr)
+        ld	bc, $30
+        add	hl, bc
+        pop	bc
+        ld	(SndCardDetectAddr), hl
+        jr	DetectSndCardStringInnerLoop
+
+
+;{	InitMusicPlayer	
+InitMusicPlayer		
+        ; elso körben a zene alap adataiból eloállítjuk az egyes részek címeit
+        xor	a
+        ld	(MP_Flag), a
+        
+        ld	hl, FreqTable
+        ld	(AddrFreqTable), hl
+        
+        ld	hl, MusicData+MHEAD
+
+        call	InitFreqTable
+        
+        ld	ix,Channels
+        ld	a,(MusicData+MHEAD.ChannelNr)
+        ld	b,a
+        
+        ld	a,(MusicData+MHEAD.TrackSize)
+        ld	c,a
+        ld	a,(MusicData+MHEAD.PatternSize)
+
+SndInitChannelLoop:
+        ld	(ix+MCHAN.TrackAddr),l
+        ld	(ix+MCHAN.TrackAddr+1),h
+        ld	(ix+MCHAN.TrackSize),c
+        ld	(ix+MCHAN.PatternSize),a
+        
+        ld	(ix+MCHAN.EnvelopePtr),0
+        ld	(ix+MCHAN.EnvelopePtr+1),0
+        ld	(ix+MCHAN.Volume),0
+        
+        ld	e, c
+        ld	d, 0
+        add	hl, de
+        
+        ld	de, MCHAN
+        add	ix, de
+        
+        djnz	SndInitChannelLoop
+        
+        ret
+
+        
+;{	InitFreqTable				
+InitFreqTable:		
+        push	hl
+        
+        ld	a,(SndCardType)
+        cp	1
+        jr	nz, InitFreqTableExit
+        
+        ld	b,FREQ_TABLE_SIZE
+        ld	hl,(AddrFreqTable)
+        ld	ix,ConvertedFreqTable
+
+InitFreqTableLoop:			
+        ld	e,(hl)
+        inc	hl
+        ld	d,(hl)
+        inc	hl
+        
+        push	hl
+        
+        ld	h,d
+        ld	l,e
+        
+        srl	d
+        rr	e
+        srl	d
+        rr	e
+        srl	d
+        rr	e
+        
+        or	a
+        sbc	hl,de
+        
+        ld	(ix+0),l
+        ld	(ix+1),h
+        inc	ix
+        inc	ix
+        
+        pop	hl
+        djnz	InitFreqTableLoop
+        
+        
+        ld	hl, ConvertedFreqTable
+        ld	(AddrFreqTable),hl
+
+InitFreqTableExit:
+        pop	hl
+        ret
+
+        
+;{	StartMusic				
+StartMusic		
+        ld	a,(MusicData+MHEAD.ChannelNr)
+        ld	b,a
+        
+        xor	a
+        ld	(MP_TempoCounter),a
+        ld	ix, Channels
+
+StartMusicLoop:			
+        push	bc
+        
+        ld	(ix+MCHAN.TrackPtr),0
+        
+        call	SetPatternOfTrack
+        
+        ld	de, MCHAN
+        add	ix, de
+        
+        pop	bc
+        djnz	StartMusicLoop
+        
+        ld	a,$43			; 6. bit 1-be állításával engedélyezi a zene léptetését
+        ld	(MP_Flag),a
+        
+        ret
+
+        
+        
+;{	StopMusic				
+StopMusic		
+        xor     a
+        ld	(MP_Flag), a
+
+        ld      a, (SndCardType)
+        or      a
+        ret     z
+
+        call    SndInitChip
+
+        ld      a, (SndCardType)                ; disable clock on game card
+        cp      a, SndCardGame
+        ret     nz
+
+        ld	a, (SndCardBaseAddr)
+        add     a, GameCardControlPort
+        ld      c, a
+        ld      a, GameCardClockEnable
+        out     (c), a
+
+        call    SndInitChip
+
+        ret
+;}
+        
+;{	SetPatternOfTrack
+;	Új pattern kezdete	
+SetPatternOfTrack:
+        ld	l,(ix+MCHAN.TrackAddr)
+        ld	h,(ix+MCHAN.TrackAddr+1)
+        ld	c,(ix+MCHAN.TrackPtr)
+        
+        ld	b, 0
+        add	hl, bc			; 'HL' mostmár a konkrét Track címét tartalmazza, amire a TrackPtr mutat
+        
+        ld	a, (hl)			; 'A'-ba betöltjük a következő pattern indexet
+        add	a,a
+        
+        ld	hl, (MusicData+MHEAD.PatternOffs)
+        ld	bc,MusicData
+        add	hl,bc
+        
+        ld	c,a
+        ld	b,0
+        add	hl,bc
+        
+        ld	c,(hl)
+        inc	hl
+        ld	b,(hl)
+        ld	hl,MusicData
+        add	hl,bc
+        
+        ld	(ix+MCHAN.PatternPtr),l
+        ld	(ix+MCHAN.PatternPtr+1),h
+        xor	a
+        ld	(ix+MCHAN.PatternSizeCnt),a
+        ld	(ix+MCHAN.PatternDelay),a
+        ret
+;}
+        
+        
+;{	StepPattern			
+StepPattern		
+        ld	a,(ix+MCHAN.PatternDelay)
+        or	a
+        jr	z,@NewSound
+        dec	(ix+MCHAN.PatternDelay)
+        ret
+@NewSound		
+        ld	a,(ix+MCHAN.PatternSize)
+        cp	(ix+MCHAN.PatternSizeCnt)
+        jr	nz,@LoadSound		; Nincs vége -> Betöltjük az új hang adatokat és léptetjük a PatternPtr-t
+        
+        ;Track léptetése	
+        ld	a,(ix+MCHAN.TrackPtr)	; 'L'=TrackSize, 'H'=TrackPtr
+        inc	a
+        cp	(ix+MCHAN.TrackSize)
+        jr	nz,@StoreTracpPtr
+        
+        xor	a
+@StoreTracpPtr		
+        ld	(ix+MCHAN.TrackPtr),a
+        call	SetPatternOfTrack	; Az új pattern inicializálása
+@LoadSound		
+        ld	l,(ix+MCHAN.PatternPtr)
+        ld	h,(ix+MCHAN.PatternPtr+1)
+        
+        ld	b,(hl)			; 'B' a megszólaltatandó hang soundId-je
+        inc	hl
+        ld	c,(hl)			; 'C' az envelope index
+        inc	hl
+        ld	a,(hl)			; 'A' a PatternDelay
+        inc	hl
+        ld	(ix+MCHAN.PatternPtr),l
+        ld	(ix+MCHAN.PatternPtr+1),h
+        ld	d,a
+        dec	a
+        ld	(ix+MCHAN.PatternDelay),a
+        
+        ld	a,(ix+MCHAN.PatternSizeCnt)
+        add	a,d
+        ld	(ix+MCHAN.PatternSizeCnt),a
+        
+        ld	a,b			; 'A' = soundId
+        cp	EMPTY_SOUND
+        ret	z
+        
+        cp	MUTE_SOUND
+        jr	z,@Mute
+        
+        cp	4
+        jr	nc,@Voice
+        
+        ; A zaj csatorna kezelése
+        ld	(ix+MCHAN.Pitch),a
+        ld	(ix+MCHAN.Pitch+1),0
+        jr	StepPatterOk
+@Mute			
+        ld	(ix+MCHAN.Volume),0
+        ld	(ix+MCHAN.EnvelopePtr),0
+        ld	(ix+MCHAN.EnvelopePtr+1),0
+        jr	StepPatterOk
+@Voice			
+        add	a,a			; 'A' = soundId * 2 (mert a FreqTable 2 byte-os elemekbol áll)
+        
+        ld	e,a
+        ld	d,0
+        ld	hl,(AddrFreqTable)
+        add	hl,de			; 'HL' a FreqTable aktuális elemére mutat
+        
+        ld	d,(hl)			; 'DE'-be betöltjük a FreqTable-ból a PITCH értéket
+        inc	hl
+        ld	(ix+MCHAN.Pitch),d
+        ld	d,(hl)
+        ld	(ix+MCHAN.Pitch+1),d
+        
+        ; Ide kerülne az envelope inicializálása. Itt 'C' mutatja az EnvelopeID-t
+        
+;*				ld	hl,0
+;*				cp	EMPTY_SOUND*2
+;*				ld	a,0
+;*				ld	(ix+MCHAN.Volume),a
+;*				;jr	z,@Mute
+StepPatterOk:			
+        call	GetEnvelopeAddr
+;@Mute			
+        ld	(ix+MCHAN.EnvelopePtr),l
+        ld	(ix+MCHAN.EnvelopePtr+1),h
+        
+;				ld	a,15			; Helyette most konstans 15-ös hangerot állítunk be
+;				ld	(Ch0_Volume),a
+        
+        ret
+        
+        
+;{	GetEnvelopeAddr				
+GetEnvelopeAddr		
+        ld	a,c
+        
+        ld	hl,(MusicData+MHEAD.InstrumentOffs)
+        ld	bc,MusicData
+        add	hl,bc
+        
+        add	a,a
+        ld	c,a
+        ld	b,0
+        add	hl,bc
+        
+        ld	c,(hl)
+        inc	hl
+        ld	b,(hl)
+        ld	hl,MusicData
+        add	hl,bc
+        
+        ret
+;}
+        
+        ;#define	TVC_SOUND 1
+        
+        
+;{	MusicPlayer_IT				
+MusicPlayer_IT		
+        ld	a,(MP_Flag)
+
+        bit	6,a
+        ret	z
+
+        bit     0, a
+        ret     z
+        
+        ld	a,(MP_TempoCounter)
+        or	a
+        jr	z,@StepPattern0
+        inc	a
+        cp	MUSIC_TEMPO
+        jr	nz,@StoreTempoCounter
+        xor	a
+@StoreTempoCounter	
+        ld	(MP_TempoCounter),a
+        jp	@Mixer
+@StepPattern0		
+        inc	a
+        ld	(MP_TempoCounter),a
+        
+        ; A patternek léptetése				
+        ld	a,(MusicData+MHEAD.ChannelNr)
+        ld	b,a
+        ld	ix,Channels
+@InnerStepPatterns	
+        push	bc
+        
+        call	StepPattern
+        
+        ld	bc, MCHAN
+        add	ix,bc
+        
+        pop	bc
+        djnz	@InnerStepPatterns
+@Mixer			
+;*				ld	hl,MP_BaseCounter
+;*				inc	(hl)
+;*				bit	0,(hl)
+;*			;	jr	nz,@SkipEnvelopeStep
+        
+        ; Ide jön a két csatorna envelope léptetése
+        ld	a,(MusicData+MHEAD.ChannelNr)
+        ld	b,a
+        ld	hl,Channels+MCHAN.EnvelopePtr
+@EnvInner		
+        
+        push	hl
+        
+        ld	e,(hl)			; 'DE' = envelope címe
+        inc	hl
+        ld	d,(hl)
+        
+        ld	a,d
+        or	e
+        jr	z,@Ok
+        
+        dec	hl			; 'HL' = Volume címe
+        dec	hl
+        
+        ld	a,(de)			; 'A' = hangerő
+        ld	c,a			; 'C' = hangerő
+        or	a
+        jr	nz,@NotEnvEnd
+        
+        ; Vége az envelope sornak
+        ld	(hl),a			; Hangerő = 0;	
+        inc	hl
+        ld	(hl),a			; EnvelopePtr = 0
+        inc	hl
+        ld	(hl),a
+        jr	@Ok
+@NotEnvEnd		
+        ; léptetjük az envelope-ot
+        and	15
+        ld	(hl),a			; Letároljuk a hangerőt
+        inc	hl
+        
+        inc	de			; EnvelopePtr léptetése
+        
+        push	bc
+        
+        srl	c
+        srl	c
+        srl	c
+        srl	c
+        
+        ld	b,0
+        ex	de,hl
+        
+        or	a
+        sbc	hl,bc
+        
+        ex	de,hl
+        
+        pop	bc
+        
+        ld	(hl),e			; majd az új EnvelopePtr-t
+        inc	hl
+        ld	(hl),d
+@Ok			
+        pop	hl
+        
+        ld	de, MCHAN
+        add	hl,de
+        djnz	@EnvInner
+@SkipEnvelopeStep	
+
+        ; SN 76489
+        ld	a,(MusicData+MHEAD.ChannelNr)
+        ld	b,a
+        ;dec	b
+        ld	hl,Channels+MCHAN.Pitch
+        ld	d,0
+@InnerUpdateChan	
+        push	bc
+        push	hl
+        
+        call	SetPitchSN
+        call	SetVolumeSN
+        
+        ld	a,d
+        add	a,32
+        ld	d,a
+        
+        pop	hl
+        ld	bc, MCHAN
+        add	hl,bc
+        
+        pop	bc
+        djnz	@InnerUpdateChan
+        
+        
+        ret
+
+;}
+        
+        
+;{	SetPitchSN
+; 	Input:
+;		'HL' = Az adott csatorna pitch értékére mutat
+;		'D' = csatorna maszkja
+SetPitchSN		
+        ld	b,d
+        
+        ld	a,(SndCardBaseAddr)
+        ld	c,a
+        
+        ld	a,(hl)
+        ld	e,a
+        
+        inc	hl
+        ld	d,(hl)
+        dec	hl
+        
+        ld	a,d
+        or	a
+        jr	nz,@SetPitch
+        
+        ld	a,e
+        and	$fc
+        jr	z,@Noise
+@SetPitch		
+        ld	a,e
+        and	$f
+        or	b
+        or	$80
+        out	(c),a
+        
+        srl	d
+        rr	e
+        
+        srl	d
+        rr	e
+        
+        srl	d
+        rr	e
+        
+        srl	d
+        rr	e
+        
+        ld	a,e
+        and	$3f
+        out	(c),a
+        
+        ld	d,b
+        ret
+@Noise			
+        ld	a,e
+        or	b
+        or	$80
+;				or	$e4
+        out	(c),a
+        ld	d,b
+        ret
+
+        
+;{	SetVolumeSN
+; 	Input:
+;		'HL' = Az adott csatorna pitch értékére mutat
+;		'D' = csatorna maszkja
+SetVolumeSN		
+        inc	hl
+        inc	hl
+        
+        ld	e,(hl)
+        ld	a,15
+        sub	e
+        and	15
+        
+        or	d
+        or	$90
+        out	(c),a
+        
+        ret
+        
+        ret
+     
+FreqTable		
+        dw	1710,1614,1523,1438,1357,1281,1209,1141,1077,1016,959,905,855,807,761,719,678,640,604,570,538,508,479,452,427,403,380,359,339,320,302,285
+        dw	269,254,239,226,213,201,190,179,169,160,151,142,134,127,119,113,106,100,95,89,85,80,75,71,67,63,59,56,53,50,47,44
+        dw	42,40,37,35,33,31,29,28
+        
+        
+MusicData						; EZ A CÍMKE MÉG KELL!! A zene adatait ez alá kell másolni!
+        
+        
+ChannelNr		db	4
+TrackSize		db	7
+PatternSize		db	48
+CardFlag		db	0
+PatternOffs		dw	36
+InstrumentOffs		dw	92
+Track0
+        db	0,4,8,12,16,20,24
+Track1
+        db	1,5,9,13,17,21,25
+Track2
+        db	2,6,10,14,18,22,26
+Track3
+        db	3,7,11,15,19,23,27
+PatternOffset
+        dw	108,207,267,327,405,504,564,624,708,807,867,903,981,1080,1140,1176,1260,1359,1419,1455,1533,1632,1692,1728,1812,1833,1839,1845
+InstrumentOffset
+        dw	1989,1998,2007,2016,2025,2036,2045,2054
+
+Patterns
+        db	9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,2,9,0,1,9,0,2,9,0,1,12,0,2,12,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,1,11,0,1,12,0,1
+
+        db	48,6,2,47,6,1,45,6,2,52,6,7,45,6,2,47,6,1,48,6,2,50,6,3,48,6,3,47,6,1
+        db	48,6,2,47,6,1,45,6,2,52,6,7,48,6,2,50,6,1,52,6,2,53,6,3,52,6,3,50,6,1
+
+
+        db	73,7,3,48,3,2,47,3,1,45,3,2,52,3,7,45,3,2,47,3,1,48,3,2,50,3,3,48,3,3
+        db	47,3,1,48,3,2,47,3,1,45,3,2,52,3,7,48,3,2,50,3,1,52,3,2,53,3,3,52,3,1
+
+
+        db	0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,2,2,4,1,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,3,0,4,2,1,5,1,2,4,2,2,4,1
+
+        db	14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	14,0,2,14,0,1,14,0,2,14,0,1,19,0,2,21,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	17,0,1,16,0,1,14,0,1
+
+        db	53,6,2,52,6,1,50,6,2,57,6,7,50,6,2,52,6,1,53,6,2,55,6,3,53,6,3,52,6,1
+        db	53,6,2,52,6,1,50,6,2,57,6,7,50,6,2,52,6,1,53,6,2,55,6,3,53,6,3,52,6,1
+
+
+        db	72,0,3,53,3,2,52,3,1,50,3,2,57,3,7,50,3,2,52,3,1,53,3,2,55,3,3,53,3,3
+        db	52,3,1,53,3,2,52,3,1,50,3,2,57,3,7,50,3,2,52,3,1,53,3,2,55,3,3,53,3,1
+
+
+        db	0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,2,2,4,1,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,3,0,4,1,2,4,1,1,5,1,2,4,1,2,4,1,2,4,1
+
+        db	9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,2,9,0,1,9,0,2,9,0,1,12,0,2,12,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,1,11,0,1,12,0,1
+
+        db	21,1,1,33,1,1,45,1,1,33,2,2,21,2,1,40,6,6,36,6,6,35,6,3,28,1,2,40,1,1
+        db	21,1,1,33,1,1,45,1,1,33,2,2,21,2,1,40,6,6,36,6,4,38,6,1,36,6,1,35,6,6
+
+
+        db	73,7,1,73,7,8,40,3,6,36,3,6,35,3,3,73,7,1,73,7,8,40,7,6,36,7,4,38,7,1
+        db	36,7,1,35,7,3
+
+        db	0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,2,2,4,1,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,3,0,4,2,1,5,1,2,4,2,2,4,1
+
+        db	14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	14,0,2,14,0,1,14,0,2,14,0,1,19,0,2,21,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	17,0,1,16,0,1,14,0,1
+
+        db	26,1,1,38,1,1,50,1,1,38,2,2,26,2,1,45,6,6,41,6,6,40,6,3,33,1,2,45,1,1
+        db	26,1,1,38,1,1,50,1,1,38,2,2,26,2,1,45,6,6,41,6,4,43,6,1,41,6,1,40,6,6
+
+
+        db	73,7,1,73,7,8,45,3,6,41,3,6,40,3,3,73,7,1,73,7,8,45,7,6,41,7,4,43,7,1
+        db	41,7,1,40,7,3
+
+        db	0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,2,2,4,1,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,3,0,4,1,2,4,1,1,5,1,2,4,1,2,4,1,2,4,1
+
+        db	9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,2,9,0,1,9,0,2,9,0,1,12,0,2,12,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1,9,0,2,9,0,1
+        db	9,0,1,11,0,1,12,0,1
+
+        db	21,1,1,33,1,1,45,1,1,33,2,2,21,2,1,40,6,6,35,6,6,33,6,3,28,1,2,40,1,1
+        db	21,1,1,33,1,1,45,1,1,33,2,2,21,2,1,40,6,6,35,6,4,36,6,1,35,6,1,33,6,6
+
+
+        db	73,7,1,73,7,5,36,6,6,38,6,6,36,6,3,73,7,1,73,7,8,36,6,6,38,6,4,40,6,1
+        db	38,6,1,36,6,6
+
+        db	0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,2,2,4,1,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,3,0,4,2,1,5,1,2,4,2,2,4,1
+
+        db	14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	14,0,2,14,0,1,14,0,2,14,0,1,19,0,2,21,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1,14,0,2,14,0,1
+        db	17,0,1,16,0,1,14,0,1
+
+        db	26,1,1,38,1,1,50,1,1,38,2,2,26,2,1,45,6,6,40,6,6,41,6,3,33,1,2,45,1,1
+        db	26,1,1,38,1,1,50,1,1,38,2,2,26,2,1,45,6,6,40,6,4,41,6,1,40,6,1,38,6,6
+
+
+        db	73,7,1,73,7,5,41,6,6,43,6,6,38,6,3,73,7,1,73,7,8,41,6,6,43,6,4,45,6,1
+        db	43,6,1,41,6,6
+
+        db	0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,2,2,4,1,0,4,2,1,5,1,2,4,3,0,4,2,1,5,1,2,4,3,0,4,2
+        db	1,5,1,2,4,3,0,4,1,2,4,1,1,5,1,2,4,1,2,4,1,2,4,1
+
+        db	9,5,1,73,7,20,12,0,2,12,0,1,9,0,2,73,7,1,73,7,21
+
+        db	21,5,1,73,7,47
+
+        db	33,5,1,73,7,47
+
+        db	0,4,1,3,4,1,1,5,1,2,4,1,3,4,1,3,4,1,0,4,1,3,4,1,1,5,1,2,4,1
+        db	3,4,1,3,4,1,0,4,1,3,4,1,1,5,1,2,4,1,3,4,1,3,4,1,0,4,1,3,4,1
+        db	1,5,1,2,4,1,3,4,1,2,4,1,0,4,1,3,4,1,1,5,1,2,4,1,3,4,1,3,4,1
+        db	0,4,1,3,4,1,1,5,1,2,4,1,3,4,1,3,4,1,0,4,1,3,4,1,1,5,1,2,4,1
+        db	3,4,1,3,4,1,0,4,1,3,4,1,1,5,1,2,4,1,3,4,1,2,4,1
+
+
+Instruments
+        db	15,14,15,13,12,7,5,6,16
+
+        db	14,10,12,8,10,6,9,6,16
+
+        db	9,5,7,3,5,2,3,4,16
+
+        db	8,7,6,5,6,4,5,3,16
+
+        db	15,14,13,10,6,5,4,6,10,1,16
+
+        db	13,11,8,4,2,3,4,1,16
+
+        db	15,14,14,12,10,8,10,6,16
+
+        db	16
+
+
+

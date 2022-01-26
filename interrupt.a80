@@ -1,0 +1,47 @@
+        ;---------------------------------------------------------------------
+        ; Initialize custom interrupt handler
+InitInterrupt:
+        di
+
+        ld      hl, (IT_VECTOR_ADDR)            ; save original IT vector
+        ld      (ItVectorSave+1), hl
+
+        ld      hl, InterruptEntry         ; redirect interrupt to music player routine
+        ld      (IT_VECTOR_ADDR), hl
+
+        ei
+
+        ret
+        
+        ;---------------------------------------------------------------------
+        ; Deinitialize custom interrupt handler
+RestoreInterrupt:
+        di
+        
+        ld      hl, (ItVectorSave+1)         ; restore IT vector address
+        ld      (IT_VECTOR_ADDR), hl
+
+        ei
+        
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Custom interrupt handler
+InterruptEntry:
+        push	bc
+        push	de
+        push	hl
+        push	ix
+        push	iy
+
+        call	MusicPlayer_IT
+        call    TextScroll
+
+        pop	iy
+        pop	ix
+        pop	hl
+        pop	de
+        pop	bc
+        
+ItVectorSave:
+        jp      0

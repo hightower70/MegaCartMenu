@@ -1,6 +1,5 @@
 ; Cartridge start memory address
 PROGRAM_START_ADDRESS   equ 6639
-PAGE_DATA_START_ADDRESS equ $c007
 
 ; System memory addresses
 P_SAVE           equ $0003      ; Memory page save (mirror for port 02h)
@@ -12,6 +11,7 @@ BORDER           equ $0b4f      ; Border color register
 VIDEOMEM         equ $8000      ; start of the video memory
 U3_ADDRESS       equ $c000      ; U3 RAM address
 U3_SIZE          equ $4000      ; U3 RAM size
+IT_VECTOR_ADDR   equ $003e      ; jump vector address of the interrupt
 
 ; Memory addresses
 IMAGE_BUFFER0   equ $c000

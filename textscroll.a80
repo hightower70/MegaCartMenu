@@ -1,0 +1,202 @@
+
+SCROLL_TEXT_DELAY       db      0               ; Delay (number of VSYNC) for the scroll
+SCROLL_PHASE            db      0               ; Scroll phase (pixel index in the 4 pixel wide character)
+SCROLL_CHARACTER        dw      0               ; Current character address in the scroll text (rightmost character on the screen)
+SCROLL_CHAR_COLOR       db      0               ; Saved character color
+SCROLL_BACKGROUND_COLOR db      0               ; Saved background color
+
+InitTextScroll:
+        ; init scroll text
+        call    SetPaging_U0_U1_VID_SYS        ; page in video memory
+
+        ld      a, 7                            ; set character color
+        call    SetCharColor
+
+        ld      a, 15                           ; set background color
+        call    SetCharacterBackgroundColor
+
+        ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
+        ld      a, ' '                          ; Start scrolling with a space
+        call    PutChar                         
+
+        call    SetPaging_U0_U1_U2_SYS         ; restore paging
+
+        ld      a, 0                            ; init scroll variables
+        ld      (SCROLL_PHASE), a
+        ld      hl, SCROLL_TEXT
+        ld      (SCROLL_CHARACTER), hl
+
+        ret
+
+TextScroll:
+        ; check delay
+        ld      a, (SCROLL_TEXT_DELAY)          ; Handle scroll delay
+        inc     a                               ; increment delay counter
+        ld      (SCROLL_TEXT_DELAY), a
+        cp      a, SCROLL_DELAY
+        ret     c
+
+        ; scroll text
+        xor     a                               ; reset delay counter
+        ld      (SCROLL_TEXT_DELAY), a
+
+        ; save current text colors
+        ld      a, (CharColorSave)
+        ld      (SCROLL_CHAR_COLOR),  a
+        
+        ld      a,(CharBackgroundSave)
+        ld      (SCROLL_BACKGROUND_COLOR), a
+
+        ld	a, P_U0_U1_VID_SYS              ; Page in video memory to page 2.: U0, U1, VID, SYS
+	out	(PAGE_REG), a        
+
+        ld      a, (SCROLL_PHASE)               ; update scroll phase (scroll position within character)
+        inc     a
+        and     $03                             ; valid phase values are 0-3
+        ld      (SCROLL_PHASE), a
+
+        or      a
+        jr      nz, LeftScrollPhaseNonzero
+
+        ; at zero phase draw character
+
+        ld      a, 7                            ; set character color
+        call    SetCharColor
+
+        ld      a, 15                           ; set background color
+        call    SetCharacterBackgroundColor
+
+        ld      hl, (SCROLL_CHARACTER)          ; get character pos
+        ld      a, (hl)
+        inc     hl
+        or      a                               ; end of string?
+        jr      nz, LeftScrollNoStringEnd
+
+        ld      hl, SCROLL_TEXT                 ; restart from the first character
+        ld      a, (hl)
+        inc     hl
+
+LeftScrollNoStringEnd:
+        ld      (SCROLL_CHARACTER), hl          ; store character address
+
+        ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
+        call    PutChar                         ; a register already contains the character
+
+LeftScrollPhaseNonzero:
+        ld      ix, VIDEOMEM + SCREEN_WIDTH * 240
+
+        ; scroll area to left by one pixel
+        ld      hl, VIDEOMEM + SCREEN_WIDTH * 235 - 1
+        ld      c, 5                            ; scroll are height = 5
+
+LeftScrollLine:
+        ; get incoming pixel data
+        ld      a, (SCROLL_PHASE)
+
+        cp      a, 0
+        jr      nz, ScrollPhase1
+
+        ld      a, (ix)                         ; load pixel data
+        and     a, $aa                          ; keep right pixel
+        srl     a                               ; left pixel -> right pixel
+        ld      d, a
+        jr      LeftScrollLinePixels
+
+ScrollPhase1:
+        cp      a, 1
+        jr      nz, ScrollPhase2
+
+        ld      a, (ix)                         ; load pixel data
+        and     a, $55                          ; keep right pixel
+        ld      d, a
+        jr      LeftScrollLinePixels
+
+ScrollPhase2:
+        cp      a, 2
+        jr      nz, ScrollPhase3
+
+        ld      a, (ix+1)                       ; load pixel data
+        and     a, $aa                          ; keep right pixel
+        srl     a                               ; left pixel -> right pixel        
+        ld      d, a
+
+        jr      LeftScrollLinePixels
+
+ScrollPhase3:
+        ld      a, (ix+1)                       ; load pixel data
+        and     a, $55                          ; keep right pixel
+        ld      d, a
+
+LeftScrollLinePixels:
+        ld      b, SCREEN_WIDTH
+         
+LeftScrollPixel:
+        ld      a, (hl)                         ; load pixel
+        ld      e, a                            ; save pixel for scroll
+        sla     a                               ; move one pixel to the left
+        and     $aa                             ; keep only the first pixel
+        or      d                               ; add second pixel
+        ld      (hl), a                         ; save new pixel
+        srl     e                               ; left pixel -> right pixel
+        ld      a, $55                          ; keep only right
+        and     a, e
+        ld      d, a                            ; save it in d register
+        dec     hl                              ; next pixel
+        djnz    LeftScrollPixel
+        
+        ld      de, SCREEN_WIDTH
+        add     hl, de
+        add     hl, de
+        add     ix, de
+        dec     c
+        jr      nz, LeftScrollLine
+
+        ld	a, P_U0_U1_U2_SYS	        ; Set paging to U0, U1, U2, SYS
+	out	(PAGE_REG), a
+
+        ; restore character colors
+        ld      a, (SCROLL_CHAR_COLOR)
+        call    SetCharColor
+
+        ld      a, (SCROLL_BACKGROUND_COLOR)
+        call    SetCharacterBackgroundColor
+
+        ret
+
+SCROLL_TEXT:
+        db      "MEGAPLEX CARTRIDGE BY LASZLO ARVAI AND MIHALY SARANSZKI          "
+        db      "CONTAINS VIDEOTON TV COMPUTER GAME DEVELOPMENT COMPETITIONS 2019-2021          "
+	db      "JOYSTICK UP/DOWN: SELECT YEAR     JOYSTICK LEFT/RIGHT: SELECT GAME     FIRE/RETURN: START GAME     "
+	db      "2019 GAMES: 1.IK+     2.FUSS!     3.DONKEY KONG JR.     4.CROSSFIRE     "
+	db      "5.GOMBOCFALO     6.FILLER          "
+
+	db      "2020 GAMES: 1.PUCKMAN     2.IKARI WARRIORS     3.RENEGADE     4.QUADRILLION     "
+	db      "5.VOTE2020     6.XORGAME     7.BOMBER     8.MULTITETRIS          "
+
+	db      "2021 GAMES: 1.IMPOSSIBLE MISSION     2.BOMBERMAN MEGABLAST     3.NEBULUS     "
+	db      "4.LODE RUNNER     5.SOTET KASTELY     6.GUNFRIGHT     7.MICROPROSE SOCCER     "
+	db      "8.TVC4SNAKES     9.VADASZAT A VOROS OKTOBERREL     10.TANK WARS     "
+	db      "11.RASTER RUNNER     12.FOGO          "
+
+	db      "THANKS TO ATTILA GROSZ , ISTVAN VARGA , GYORGY VINCE BELA , KEVIN THECKER , "
+	db      "SANDOR VASS , KRISZTIAN MARTA , KAROLY KISS , ZSOLT MARI , TAMAS MAJOR"
+        db      "          "
+
+	db      "GREETINGS TO GABOR SZAKACS , ATTILA ABONYI , ATTILA MIKLAN , KAROLY NAGY , "
+	db      "GABOR FORRAI , BALAZS VASVARI , ZSOLT VARADY , JARL FREY , PETER FOLDESI , "
+	db      "TAMAS LENHARDT , ANDRAS KOVER , GERGELY SZELEI , TAMAS BEREGI , ZSOLT PRIEVARA , "
+	db      "GABOR STOCKERT , CSABA NAGY , ZOLTAN NEMETH , JOZSEF LUKACS , NORBERT DOMJAN , "
+	db      "IMRE EGRI , LEVENTE HARSFALVI , SZERGELY BUTOV , OLIVER OROSZ , ZOLTAN GUGI , "
+	db      "PETER GYONGYOSSY , GABOR MAJOR , ZSOLT MOLNAR , ZOLTAN MOLNAR , KRISZTIAN MAKAI , "
+	db      "LASZLO BUZA , TAMAS KALMAN , ZSOLT KARPATI , ISTVAN SARANSZKI , ATTILA SZABO , "
+	db	"GABOR FEHER , ATTILA VASS , ZOLTAN HOLLOSY , "
+        db      "ATTILA LOSONCZI , JOZSEF TRENCSENYI , ERNO ZALKA , EVA KRAVLICS , BENCE BORDAS , "
+        db      "IMRE TANACS , GABOR ORVOS , IMRE E. ELOD , PETER BREUER , ROMEO REIDL , TAMAS BESZEDA , "
+        db      "CSABA LASZLO BACSKAY , OSZVALD BALAZS , ZOLTAN J FEHER , JANOS KISTAMAS , TAMAS BODNAR , SZILARD MATUSIK"
+        db      "          "
+        
+        db      "SPECIAL THANKS TO ZSOLT BERTOK FOR ORGANIZING SUCH AN EXCITING COMPETITION          "
+
+        db      "MEGAPLEX IS MADE BY USING DEVTOOL , VISUAL STUDIO CODE , SJASM , YATE          MADE IN HUNGARY 2021"
+
+        db      "                               ", 0 

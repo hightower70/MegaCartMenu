@@ -254,93 +254,97 @@ CharBackgroundSave2:
         inc	de			        ; Next character byte
 
                         
-                        ld	a,b			; A 'B'-ben tárolt ciklus változót elmentjük ideiglenesen 'A'-ba
-                        ld	bc,63
-                        add	hl,bc			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
-                        ld	b,a			; Az ideiglenesen elmentett ciklusváltozót vissza tesszük 'B'-be
-                        
-                        djnz	@Inner1
-                        
-                        ret
+        ld	a,b			; A 'B'-ben tárolt ciklus változót elmentjük ideiglenesen 'A'-ba
+        ld	bc,63
+        add	hl,bc			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
+        ld	b,a			; Az ideiglenesen elmentett ciklusváltozót vissza tesszük 'B'-be
+        
+        djnz	@Inner1
+        
+        ret
                         
 PutCharMask		
-                        push	de
-                        pop	ix
-                        
-                        ld	b,5			; 5 sorból áll egy karakter
+        push	de
+        pop	ix
+        
+        ld	b,5			; 5 sorból áll egy karakter
 @Inner2			
-                        ld	a,(ix+0)		; A karakter RAW sor elso byte-ja 'A'-ba kerül
-                        inc	ix			; 'DE' a következo címre lép
+        ld	a,(ix+0)		; A karakter RAW sor elso byte-ja 'A'-ba kerül
+        inc	ix			; 'DE' a következo címre lép
                         
-CharColorSaveMask1	and	$ff			; 'A' ban levo raw érték átszínezése
+CharColorSaveMask1	
+        and	$ff			; 'A' ban levo raw érték átszínezése
                         
-                        ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
-                        
-                        ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
-                        and	$aa			; 'A'-ban csak az elso pixel értéke kell!
-                        jp	z,@Skip1_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
-                        
-                        ; Elso pixel maszkolása
-                        ld	d,a			; 'D'-ben az elso pixel értéke
-                        ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
-                        and	$55			; Ebbol csak a 2. pixel értékei kellenek, az elso pixelhez tartozó biteket 0-ba kell álljtani
-                        or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
-                        ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+        ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
+        
+        ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
+        and	$aa			; 'A'-ban csak az elso pixel értéke kell!
+        jp	z,@Skip1_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
+        
+        ; Elso pixel maszkolása
+        ld	d,a			; 'D'-ben az elso pixel értéke
+        ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
+        and	$55			; Ebbol csak a 2. pixel értékei kellenek, az elso pixelhez tartozó biteket 0-ba kell álljtani
+        or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+        ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
 @Skip1_1		
-                        ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
-                        and	$55			; 'A'-ban csak a második pixel értéke kell!
-                        jp	z,@Skip1_2		; A második pixel üres, nem kell további feldolgozás
-                        
-                        ; Második pixel maszkolása
-                        ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
-                        ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
-                        and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
-                        or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit 
-                        ld	e,a
+        ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
+        and	$55			; 'A'-ban csak a második pixel értéke kell!
+        jp	z,@Skip1_2		; A második pixel üres, nem kell további feldolgozás
+        
+        ; Második pixel maszkolása
+        ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
+        ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
+        and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
+        or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit 
+        ld	e,a
 @Skip1_2		
-                        ; 'E' tartalmazza a háttérre maszkolt adatot
-                        ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat 
-                        inc	hl			; és növeljük a célpointer
+        ; 'E' tartalmazza a háttérre maszkolt adatot
+        ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat 
+        inc	hl			; és növeljük a célpointer
+        
+        ; Hogy ne kelljen vízszintesen ciklus - mivel egy karakter mindösszesen 2 byte (4 pixel) széles, ezért megismételjük a fenti kódot
+        ld	a,(ix+0)		; A karakter RAW sor második byte-ja 'A'-ba kerül
+        inc	ix			; 'DE' a következo címre lép
                         
-                        ; Hogy ne kelljen vízszintesen ciklus - mivel egy karakter mindösszesen 2 byte (4 pixel) széles, ezért megismételjük a fenti kódot
-                        ld	a,(ix+0)		; A karakter RAW sor második byte-ja 'A'-ba kerül
-                        inc	ix			; 'DE' a következo címre lép
+CharColorSaveMask2	
+        and	$ff			; 'A' ban levo raw érték átszínezése
                         
-CharColorSaveMask2	and	$ff			; 'A' ban levo raw érték átszínezése
-                        
-                        ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
-                        
-                        ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
-                        and	$aa			; 'A'-ban csak az elso pixel értéke kell!
-                        jp	z,@Skip2_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
-                        
-                        ; Elso pixel maszkolása
-                        ld	d,a			; 'D'-ben az elso pixel értéke
-                        ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
-                        and	$55			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
-                        or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
-                        ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+        ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
+        
+        ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
+        and	$aa			; 'A'-ban csak az elso pixel értéke kell!
+        jp	z,@Skip2_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
+        
+        ; Elso pixel maszkolása
+        ld	d,a			; 'D'-ben az elso pixel értéke
+        ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
+        and	$55			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+        or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+        ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+
 @Skip2_1		
-                        ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
-                        and	$55			; 'A'-ban csak a második pixel értéke kell!
-                        jp	z,@Skip2_2		; A második pixel üres, nem kell további feldolgozás
-                        
-                        ; Második pixel maszkolása
-                        ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
-                        ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
-                        and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
-                        or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit 
-                        ld	e,a
+        ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
+        and	$55			; 'A'-ban csak a második pixel értéke kell!
+        jp	z,@Skip2_2		; A második pixel üres, nem kell további feldolgozás
+
+        ; Második pixel maszkolása
+        ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
+        ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
+        and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
+        or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit 
+        ld	e,a
+
 @Skip2_2		
-                        ; 'E' tartalmazza a háttérre maszkolt adatot
-                        ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat 
-                        
-                        ld	de,63
-                        add	hl,de			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
-                        
-                        djnz	@Inner2
-                        
-                        ret
+        ; 'E' tartalmazza a háttérre maszkolt adatot
+        ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat 
+        
+        ld	de,63
+        add	hl,de			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
+        
+        djnz	@Inner2
+        
+        ret
 
         ;---------------------------------------------------------------------
         ; Calculates video memory address from coordinates
@@ -385,44 +389,44 @@ PosToVidmemAddress:
 ;*				inc	hl
 ;*				call	SetCharColor
 DrawStr			
-                        ld	(@StoreStartPos),bc	; Lementjük a szöveg elején a szövek kezdo X,Y értékét, hogy esetlegesen az új sor kezdésekor rendelkezésre álljon
+        ld	(@StoreStartPos),bc	; Lementjük a szöveg elején a szövek kezdo X,Y értékét, hogy esetlegesen az új sor kezdésekor rendelkezésre álljon
 @Inner			
-                        ld	a,(hl)			; 'A'-ba a buffer következo eleme
-                        inc	hl			; A buffer mutatóval a következo elemre állunk
-                        or	a			; Ha a kirakandó karakter 0, akkor végeztünk még akkor is, ha egyébként 'D'-ben leírt kirakási hosszt nem értük el
-                        ret	z
-                        
-                        cp	13			; 'New line' karakter??
-                        jr	nz,PutChar1		; Ha nem, akkor tovább a karakter kirajzolására
-                        
-                        ld	bc,(@StoreStartPos)	; Ha 'New line' karakter volt, akkor 'BC'-be visszatöltjük az elozo sor kezdo X,Y pontját
-                        ld	a,c			; 'A' = Y
-                        add	a,CHAR_HEIGHT		; 'A' = Y + karakter magassága
-                        ld	c,a			; 'C'-be vissza tesszük az új Y értéket
-                        ld	(@StoreStartPos),bc	; Majd az X,Y értéket - mint új sor elso pozícióját - újra letároljuk, ha késobb szükség lenne rá
-                        jr	@SkipChar
+        ld	a,(hl)			; 'A'-ba a buffer következo eleme
+        inc	hl			; A buffer mutatóval a következo elemre állunk
+        or	a			; Ha a kirakandó karakter 0, akkor végeztünk még akkor is, ha egyébként 'D'-ben leírt kirakási hosszt nem értük el
+        ret	z
+        
+        cp	13			; 'New line' karakter??
+        jr	nz,PutChar1		; Ha nem, akkor tovább a karakter kirajzolására
+        
+        ld	bc,(@StoreStartPos)	; Ha 'New line' karakter volt, akkor 'BC'-be visszatöltjük az elozo sor kezdo X,Y pontját
+        ld	a,c			; 'A' = Y
+        add	a,CHAR_HEIGHT		; 'A' = Y + karakter magassága
+        ld	c,a			; 'C'-be vissza tesszük az új Y értéket
+        ld	(@StoreStartPos),bc	; Majd az X,Y értéket - mint új sor elso pozícióját - újra letároljuk, ha késobb szükség lenne rá
+        jr	@SkipChar
 PutChar1		
-                        push	hl			; Kirakjuk a karaktert
-                        push	de
-                        push	bc
-                        call	PutChar
-                        pop	bc
-                        pop	de
-                        pop	hl
-                        
-                        ; 'B' tárolja karakter X pozícióját. Egy karakter 2 byte széles. Most hozzá adunk 1-et v. 2-t annak a függvényében, hogy a 'SpacePropFlg' flag be van-e kapcsolva
-                        inc	b
-                        
-                        ld	a,(SpacePropFlg)	; Levizsgáljuk, hogy maszkolt karakter kirakás van-e?
-                        or	a
-                        jr	nz,@SkipChar
-                        
-                        inc	b
+        push	hl			; Kirakjuk a karaktert
+        push	de
+        push	bc
+        call	PutChar
+        pop	bc
+        pop	de
+        pop	hl
+        
+        ; 'B' tárolja karakter X pozícióját. Egy karakter 2 byte széles. Most hozzá adunk 1-et v. 2-t annak a függvényében, hogy a 'SpacePropFlg' flag be van-e kapcsolva
+        inc	b
+        
+        ld	a,(SpacePropFlg)	; Levizsgáljuk, hogy maszkolt karakter kirakás van-e?
+        or	a
+        jr	nz,@SkipChar
+        
+        inc	b
 @SkipChar		
-                        dec	d			; Csökkentjük 'D' értékét, 
-                        jp	nz,@Inner		; és ha még nem értünk az utolsó kirakandó karakterre, akkor vissza a ciklus elejére
-                        
-                        ret
+        dec	d			; Csökkentjük 'D' értékét, 
+        jp	nz,@Inner		; és ha még nem értünk az utolsó kirakandó karakterre, akkor vissza a ciklus elejére
+        
+        ret
         ;}				
                         
         ;{	DrawNumber
@@ -431,28 +435,28 @@ PutChar1
         ;	C: Y
         ;	A: A szám mezo szélessége. Ha A=0, akkor balra igazít különben jobbra
 DrawNumber		
-                        push	af			; 'A' mentése, mert a végén szükség lesz rá a jobbra igazításnál
-                        push	bc			; 'BC'-ben most az X,Y pozíció van, ezt azért kell menteni, mert erre meg majd a jobbra igazításnál és a szöveg kiírásnál lesz szükség
-                        
-                        ld	a,0			; 'HL' karakterekké konvertálása
-                        call	ConvertDecNum16
-                        ld	d,c			; Most már 'BC' a kiírandó szám hosszát mutatja (ez mindig kisebb 255-nél, tehát a 'C'-ben van a hossz), viszont a szöveg kiíráshoz 'D'-ben kell a hossz
-                        
-                        pop	bc			; Vissza töltjük 'BC'-be az X,Y pozíciót
-                        pop	af			; illeve 'A'-ba a szám mezo sélességét az igazításhoz
-                        
-                        or	a			; Ha 'A' 0, akkor nem kell igazítani csak simán kiírni a szám buffer tartalmát
-                        jr	z,@jump
-                        
-                        sub	d			; Jobbra igazítás: 'A' mutatja a szám mezo szélességét, 'D' pedig a konvertált szám hossza. 'A'-'B' megadja hány karakterrel kell arrébb tenni a kiírást
-                        ret	c			; Ha túl kicsi a megadott szám mezo hossz, akkor nincs kiírás
-                        
-                        add	a,a			; A jobbra tolás hosszát szorozzuk 2-vel (1 karakter szélessége byt-okban)
-                        add	a,b			; majd az X pozícióhoz ('B'-ben van) hozzá adjuk
-                        ld	b,a
+        push	af			; 'A' mentése, mert a végén szükség lesz rá a jobbra igazításnál
+        push	bc			; 'BC'-ben most az X,Y pozíció van, ezt azért kell menteni, mert erre meg majd a jobbra igazításnál és a szöveg kiírásnál lesz szükség
+        
+        ld	a,0			; 'HL' karakterekké konvertálása
+        call	ConvertDecNum16
+        ld	d,c			; Most már 'BC' a kiírandó szám hosszát mutatja (ez mindig kisebb 255-nél, tehát a 'C'-ben van a hossz), viszont a szöveg kiíráshoz 'D'-ben kell a hossz
+        
+        pop	bc			; Vissza töltjük 'BC'-be az X,Y pozíciót
+        pop	af			; illeve 'A'-ba a szám mezo sélességét az igazításhoz
+        
+        or	a			; Ha 'A' 0, akkor nem kell igazítani csak simán kiírni a szám buffer tartalmát
+        jr	z,@jump
+        
+        sub	d			; Jobbra igazítás: 'A' mutatja a szám mezo szélességét, 'D' pedig a konvertált szám hossza. 'A'-'B' megadja hány karakterrel kell arrébb tenni a kiírást
+        ret	c			; Ha túl kicsi a megadott szám mezo hossz, akkor nincs kiírás
+        
+        add	a,a			; A jobbra tolás hosszát szorozzuk 2-vel (1 karakter szélessége byt-okban)
+        add	a,b			; majd az X pozícióhoz ('B'-ben van) hozzá adjuk
+        ld	b,a
 @jump			
-                        call	DrawStr			; Kiírjuk a szám buffer tartalmát
-                        ret
+        call	DrawStr			; Kiírjuk a szám buffer tartalmát
+        ret
                         
 
 NumRef			dw	10000,1000,100,10,0
@@ -462,85 +466,87 @@ NumBfrEmpty		db	'0',0
                         
                         
 ConvertDecNum16		
-                        ld	a,'0'
-                        ld	(@modify+1),a
-                        
-                        ld	a,h			; 'A'-ba tesszük 'H' értékét, majd.
-                        or	l			; or-oljuk 'L'-lel
-                        jr	nz,@n7
-                                                        ; 'H' és 'L' értéke is 0 - azaz 'HL' = 0
-                        ld	hl,NumBfrEmpty		; 'HL'-el most már a 'NumBfrEmpty'-re mutatunk..
-                        jr	StrLen			; és kiírjuk a 0-t karakteresen
+        ld	a,'0'
+        ld	(@modify+1),a
+        
+        ld	a,h			; 'A'-ba tesszük 'H' értékét, majd.
+        or	l			; or-oljuk 'L'-lel
+        jr	nz,@n7
+                                        ; 'H' és 'L' értéke is 0 - azaz 'HL' = 0
+        ld	hl,NumBfrEmpty		; 'HL'-el most már a 'NumBfrEmpty'-re mutatunk..
+        jr	StrLen			; és kiírjuk a 0-t karakteresen
 @n7			
-                        ld	bc,NumBfr		; 'BC' fogja mutatni a számot jelképezo karakterlánc aktuális címét. Most a buffer elejére állítjuk
-                        ld	de,NumRef		; 'DE' viszont a referencia tábla elemét fogja mutatni, amivel aktuálisan össze kell hasonlítani 'HL' értékét
+        ld	bc,NumBfr		; 'BC' fogja mutatni a számot jelképezo karakterlánc aktuális címét. Most a buffer elejére állítjuk
+        ld	de,NumRef		; 'DE' viszont a referencia tábla elemét fogja mutatni, amivel aktuálisan össze kell hasonlítani 'HL' értékét
 @n2			
-                        push	bc
-                        
-                        ex	de,hl			; 'DE'-t és 'HL'-t megcseréljük, így a referencia érték tábla aktuális elemére most 'HL' mutat
-                        ld	c,(hl)			; 'BC'-be betöltjük a '(HL)' címen levo adatot, 'HL'-t pedig léptetjük a késobbiekhez a következo elemre
-                        inc	hl
-                        ld	b,(hl)
-                        inc	hl
-                        ex	de,hl			; 'HL'-t vissza rakjuk 'DE'-be
-                        
-                        ld	a,b			; A referencia - 'BC' - értéke 0?
-                        or	c
-                        jr	z,@n3			; Ha 0, akkor vége a ciklikus vizsgálatnak
-                        
-                        ld	a,'0'-1			; 'A'-ba a '0' karakter értékénél egyel kisebb értéket teszünk, hogy a következo INC A utasításra pont '0' kerüljön bele
+        push	bc
+        
+        ex	de,hl			; 'DE'-t és 'HL'-t megcseréljük, így a referencia érték tábla aktuális elemére most 'HL' mutat
+        ld	c,(hl)			; 'BC'-be betöltjük a '(HL)' címen levo adatot, 'HL'-t pedig léptetjük a késobbiekhez a következo elemre
+        inc	hl
+        ld	b,(hl)
+        inc	hl
+        ex	de,hl			; 'HL'-t vissza rakjuk 'DE'-be
+        
+        ld	a,b			; A referencia - 'BC' - értéke 0?
+        or	c
+        jr	z,@n3			; Ha 0, akkor vége a ciklikus vizsgálatnak
+        
+        ld	a,'0'-1			; 'A'-ba a '0' karakter értékénél egyel kisebb értéket teszünk, hogy a következo INC A utasításra pont '0' kerüljön bele
 @n1			
-                        inc	a			; A következo ciklusban megszámoljuk, hogy 'HL'-bol hányszor tudjuk kivonni 'BC'-t azaz az adott tizes helyiértéken levo referenciát
-                        sbc	hl,bc
-                        jr	nc,@n1			; Ha 'HL' > 'BC', akkor még mindig lehet csökkenteni 'HL' értékét 'BC'-vel
-                        add	hl,bc			; 'Most már 'HL' kisebb, mint a referencia, a kivonás után tulcsordulás történt, ezért kompenzálásként hozzá adjuk 'HL'-hez 'BC'-t, így 'HL' az osztás maradéka lesz
+        inc	a			; A következo ciklusban megszámoljuk, hogy 'HL'-bol hányszor tudjuk kivonni 'BC'-t azaz az adott tizes helyiértéken levo referenciát
+        sbc	hl,bc
+        jr	nc,@n1			; Ha 'HL' > 'BC', akkor még mindig lehet csökkenteni 'HL' értékét 'BC'-vel
+        add	hl,bc			; 'Most már 'HL' kisebb, mint a referencia, a kivonás után tulcsordulás történt, ezért kompenzálásként hozzá adjuk 'HL'-hez 'BC'-t, így 'HL' az osztás maradéka lesz
+        
+        pop	bc			; 'BC'-be visszatesszük a buffer pountert
                         
-                        pop	bc			; 'BC'-be visszatesszük a buffer pountert
-                        
-@modify			cp	'0'			; Megnézzük, hogy a kapott karakter érték '0'-e?
-                        jr	z,@n2			; Ha '0', akkor vissz ugrunk a ciklus elejére, hogy kiértékeljük a következo tizedes helyiértéket
-                        
-                        ld	(bc),a			; A 'BC' által mutatott buffer pozícióba letesszük a karakter kódját
-                        inc	bc			; és növeljük a buffer pointer értékét
-                        
-                        xor	a
-                        ld	(@modify+1),a		; módosítjuk a "CP '0'" utasítást "CP 0"-ra
-                        jr	@n2			; vissza a következo helyiérték kiértékelésére
+@modify
+        cp	'0'			; Megnézzük, hogy a kapott karakter érték '0'-e?
+        jr	z,@n2			; Ha '0', akkor vissz ugrunk a ciklus elejére, hogy kiértékeljük a következo tizedes helyiértéket
+        
+        ld	(bc),a			; A 'BC' által mutatott buffer pozícióba letesszük a karakter kódját
+        inc	bc			; és növeljük a buffer pointer értékét
+        
+        xor	a
+        ld	(@modify+1),a		; módosítjuk a "CP '0'" utasítást "CP 0"-ra
+        jr	@n2			; vissza a következo helyiérték kiértékelésére
 @n3			
-                        pop	bc			; Vége a ciklusnak. Mivel a ciklus elso utasítában letettük a stack-be a 'BC' értékét, most vissza is tesszük ezt az értéket 'BC'-be
+        pop	bc			; Vége a ciklusnak. Mivel a ciklus elso utasítában letettük a stack-be a 'BC' értékét, most vissza is tesszük ezt az értéket 'BC'-be
                         
-                        ld	a,'0'			; 'L'-ben az utolsó helyiérték osztásából a maradék lapul..
-                        add	a,l			; ezért hozzá adjuk a '0' karakter értékét, ezzel megvan az utolsó helyiérték kódja
-                        ld	(bc),a			; ezt bele tesszük a buffer adott pozíciójára
-                        inc	bc			; majd növeljük a buffer mutató 'BC' értékét
+        ld	a,'0'			; 'L'-ben az utolsó helyiérték osztásából a maradék lapul..
+        add	a,l			; ezért hozzá adjuk a '0' karakter értékét, ezzel megvan az utolsó helyiérték kódja
+        ld	(bc),a			; ezt bele tesszük a buffer adott pozíciójára
+        inc	bc			; majd növeljük a buffer mutató 'BC' értékét
                         
-                        ld	a,(X10)			; Az 'X10' jelzés be van állítva?
-                        or	a
-                        jr	z,@n4			; A jelzés értéke 0, tehát nincs.. a következo részt kihagyjuk
+        ld	a,(X10)			; Az 'X10' jelzés be van állítva?
+        or	a
+        jr	z,@n4			; A jelzés értéke 0, tehát nincs.. a következo részt kihagyjuk
                         
-                        ld	a,'0'			; Az 'X10' jelzés be van állítva, a szám karakteresen leírt bufferében utána írunk még egy '0' karaktert
-                        ld	(bc),a
-                        inc	bc
+        ld	a,'0'			; Az 'X10' jelzés be van állítva, a szám karakteresen leírt bufferében utána írunk még egy '0' karaktert
+        ld	(bc),a
+        inc	bc
                         
-@n4			xor	a			; Vége a konverziónak, már csak a záró 0-t kell az utolsó buffer pozícióra kirakni
-                        ld	(bc),a
+@n4
+        xor	a			; Vége a konverziónak, már csak a záró 0-t kell az utolsó buffer pozícióra kirakni
+        ld	(bc),a
 @n5			
-                        ld	hl,NumBfr		; 'HL'-be betesszük a karakteresen ábrázolt számot leíró buffer kezdocímét
+        ld	hl,NumBfr		; 'HL'-be betesszük a karakteresen ábrázolt számot leíró buffer kezdocímét
                         
-                        ; Önállóan is hívható eljárás. 'HL' a szövegbuffer elejét tartalmazza. Eredmény: 'BC'-ben a 'HL' által mutatott 0 értékkel lezárt szöveg hossza		
-StrLen			push	hl
-                        ld	bc,0
+        ; Önállóan is hívható eljárás. 'HL' a szövegbuffer elejét tartalmazza. Eredmény: 'BC'-ben a 'HL' által mutatott 0 értékkel lezárt szöveg hossza		
+StrLen
+        push	hl
+        ld	bc,0
 @n6			
-                        ld	a,(hl)
-                        or	a
-                        jr	z,@end
-                        inc	hl
-                        inc	bc
-                        jr	@n6
+        ld	a,(hl)
+        or	a
+        jr	z,@end
+        inc	hl
+        inc	bc
+        jr	@n6
 @end			
-                        pop	hl
-                        ret
-
+        pop	hl
+        ret
 
         ;{ 	szín és grafikus mód konstansok
         ; Palette színkódok Graphics 2 és Graphincs 4 módokban

@@ -1,5 +1,6 @@
 
         .include "definitions.a80"
+        .include "gamesinfo.inc"
 
         org     PROGRAM_START_ADDRESS
 
@@ -22,15 +23,13 @@ BCS_SAVE dw     0
 DES_SAVE dw     0
 HLS_SAVE dw     0
 
-
-COLLECTION_INDEX        db      0               ; Current game collection (year) index
-COLLECTION_COUNT        db      0               ; Number of game collections
+CURRENT_COLLECTION_INDEX db      0               ; Current game collection (year) index
+CURRENT_COLLECTION       dw      0               ; Current game collection pointer
 
 IMAGE_INDEX             db      0               ; Current game (middle image in the caroussel) index in the current collection
 IMAGE_COUNT             db      0               ; Number of games in the current collection
 
 YEAR_DEC                dw      0               ; Current collection's year. Last two digits of year multiplied by 100 (eg. 2019 -> 1900)
-COLLECTION              dw      0               ; Current collection's data pointer.
 
         ; Image buffer addresses
 LEFT_IMAGE_ADDRESS:                             ; Image buffer addres for the left image in the caroussel
@@ -41,6 +40,15 @@ CENTER_IMAGE_ADDRESS:                           ; Image buffer addres for the mi
         
 RIGHT_IMAGE_ADDRESS:                            ; Image buffer addres for the right image in the caroussel
         dw      IMAGE_BUFFER2
+
+FILE_NAME_BUFFER:
+        ds FILE_NAME_LENGTH+1                   ; File name buffer
+
+MUSIC_DATA_POINTER:
+        dw      0                               ; Music file data pointer
+
+EXIT_MODE:
+        db      0                               ; Exit mode: 0 - disable screen display (for loading program file), 1 - enable screen display (for normal exit)
 
         ; ** Program start **
 START:
@@ -75,20 +83,10 @@ START:
         ld      a, $aa
         ld      (BORDER), a
 
-        ; detect and init sound card
-        call    DetectSndCard
-        ld      a, (SndCardType)                ; check if card is exists
-        or      a
-        jr      z, NoCardToInit
-
-        call    InitMusicPlayer
-        call    StartMusic
-
-NoCardToInit:
         ; show main screen
         call    SetPaging_U0_U1_VID_SYS        ; page in video memory
 
-        ld      hl, megaplex+2                  ; decompress main screen
+        ld      hl, megaplex+2                 ; decompress main screen
         ld      de, VIDEOMEM
         call    dzx7_turbo
 
@@ -104,9 +102,35 @@ NoCardToInit:
         ld      d, 255
         call    DrawStr
 
+        ; draw 'TVC GAMES COLLECTION' string
+        ld      bc, $0227
+        ld      hl, TVC_GAMES_STRING
+        ld      d, 255
+        call    DrawStr
+
+        ; draw dates string
+        ld      bc, $2d27
+        ld      hl, DATES_STRING
+        ld      d, 255
+        call    DrawStr
+
         call    SetPaging_U0_U1_U2_SYS        ; restore paging
+
+        ; disable 'search' and 'found' messages at file load
+        xor     a
+        ld      (OUT_ASSIGN), a
+
+        ; detect sound card
+        call    DetectSndCard
         
         ; Init and draw menu
+        ld      hl, GAMES_COLLECTION
+        ld      (CURRENT_COLLECTION), hl
+        xor     a
+        ld      (CURRENT_COLLECTION_INDEX), a
+
+        call    LoadCollectionResources
+
         call    DrawMenu
 
         ; Init caroussel
@@ -114,6 +138,18 @@ NoCardToInit:
         ld      (IMAGE_INDEX), a
         call    InitCarousel
 
+        ; init sound card
+        ld      a, (SndCardType)                ; check if card existing
+        or      a
+        jr      z, NoCardToInit
+
+        call    InitMusicPlayer                 ; Initializes music player
+
+        ld      hl, (MUSIC_DATA_POINTER)        ; load PSG music address
+        ld      (PSGFile), hl
+        call    StartMusic                      ; Starts music playing
+
+NoCardToInit:        
         ; initialize interrupt handler
         call    InitInterrupt
 
@@ -152,9 +188,18 @@ WaitForKey:
         cp      RETURN
         jp      z, RunProgram
 
-        jr      WaitForKey
+        cp      ESCAPE
+        jp      nz, WaitForKey
+
+        ; exit from the program
+        ld      a, 1
+        jr      StoreExitMode
 
 ReturnToBasic:
+        xor     a
+StoreExitMode:
+        ld      (EXIT_MODE), a
+
         ; restore interrupt
         call    RestoreInterrupt
 
@@ -186,6 +231,10 @@ NoCardToDeinit:
         rst     30h
         db      VMODE
 
+        ld      a, (EXIT_MODE)
+        or      a
+        jr      nz, ExitWithDisplay
+
         ; set ink to 1
         ld      a, 1
         ld      (INK), a
@@ -198,6 +247,11 @@ NoCardToDeinit:
         ld      de, HIDE_PALETTE
         rst     30h
         db      PAL
+
+ExitWithDisplay:
+        ; restore editor output assign
+        ld      a, 2
+        ld      (OUT_ASSIGN), a
 
         ; restore some shadow registers
         exx
@@ -225,17 +279,16 @@ RunProgram:
         ld      c, 2
         call    LetStringVariable
 
-        jr      ReturnToBasic                   ; continue with the basci code
-
+        jr      ReturnToBasic                   ; continue with the basic code
 
         ; Selects previous collection and updates the screen
 MoveUp:
         call    SaveSelectionCollectionPos
-        ld      a, (COLLECTION_INDEX)
+        ld      a, (CURRENT_COLLECTION_INDEX)
         or      a
         jr      nz, LDecrementCollectionIndex
 
-        ld      a, (COLLECTION_COUNT)
+        ld      a, (GAMES_COLLECTION_COUNT)
         dec     a
         jr      LStoreIndex
 
@@ -243,7 +296,26 @@ LDecrementCollectionIndex:
         dec     a
 
 LStoreIndex:
-        ld      (COLLECTION_INDEX), a           ; stores updated index
+        ld      (CURRENT_COLLECTION_INDEX), a    ; stores updated index
+
+        ; calculate collection pointer HL = CURRENT_COLLECTION_INDEX * sizeof(GamesCollection)
+        ld      b,  a                            ; set loop variable to collection index
+        
+        ld      hl, GAMES_COLLECTION             ; collection start address
+        ld      de, GamesCollection              ; Collection length
+        or      a
+        jr      z, LStoreCollectionPointer
+
+LCalculateCollectionPointer:
+        add     hl, de
+        djnz    LCalculateCollectionPointer
+
+LStoreCollectionPointer:
+        ld      (CURRENT_COLLECTION), hl        ; store pointer
+
+        call    StopMusic                       ; Stops previous music
+
+        call    LoadCollectionResources         ; load resources for the given year
 
         call    DrawMenu                        ; update menu
 
@@ -251,15 +323,19 @@ LStoreIndex:
 
         call    DrawCarousel                    ; update carousel
 
+        ld      hl, (MUSIC_DATA_POINTER)        ; load PSG music address
+        ld      (PSGFile), hl
+        call    StartMusic                      ; Starts music player
+
         jp      WaitForKey
 
         ; Selects next collection and updates the screen
 MoveDown:
         call    SaveSelectionCollectionPos      ; saves position
 
-        ld      a, (COLLECTION_COUNT)           ; increment collection index
+        ld      a, (GAMES_COLLECTION_COUNT)     ; increment collection index
         ld      b, a                            ; or wrap around if overflows
-        ld      a, (COLLECTION_INDEX)
+        ld      a, (CURRENT_COLLECTION_INDEX)
         inc     a
         cp      a, b
         jr      c, LStoreIndex
@@ -347,129 +423,117 @@ move_left_2:
 
         jp      WaitForKey
 
+LoadCollectionResources:
+        call    DrawLoadingText                 ; display 'Loading...' text
+
+        ld      hl, (CURRENT_COLLECTION)        ; hl = resource file nanme
+        ld      de, GamesCollection.File
+        add     hl, de
+        ld      de, FILE_NAME_BUFFER            ; Copy file name to the buffer
+        call    CopyFileName
+
+        ld      hl, BIN_FILE_EXTENSION          ; Append extension
+        ld      de, FILE_NAME_BUFFER
+        call    AppendFileNameExtension         
+        
+        ld      hl, RESOURCE_LOAD_ADDRESS       ; HL = resource destination address
+        ld      de, FILE_NAME_BUFFER
+        call    LoadBinaryFile
+
+        or      a                               ; exit if error occured
+        jp      nz, ReturnToBasic
+
+        ; updata music data pointer
+        ld      bc, RESOURCE_LOAD_ADDRESS
+        add     hl, bc
+        ld      (MUSIC_DATA_POINTER), hl
+
+        ld      a, (GAMES_INFO_COUNT)           ; store image count
+        ld      (IMAGE_COUNT), a
+
+        ; update current collection information
+        ld      ix, (CURRENT_COLLECTION)
+
+        ld      a, (ix+GamesInfo.Image)         ; restore last used image index
+        ld      (IMAGE_INDEX), a
+
+        ld      a, (ix+GamesCollection.YearDec)
+        ld      (YEAR_DEC), a
+
+        ld      a, (ix+GamesCollection.YearDec+1)
+        ld      (YEAR_DEC+1), a
+
+        ; load music (if sound card is installed)
+        ld      a, (SndCardType)                ; check sound card type
+        cp      a, SndCardNone
+        ret     z
+
+        ld      hl, (CURRENT_COLLECTION)        ; hl = resource file nanme
+        ld      de, GamesCollection.File
+        add     hl, de
+        ld      de, FILE_NAME_BUFFER            ; Copy file name to the buffer
+        call    CopyFileName
+
+        ld      hl, MUS_FILE_EXTENSION          ; Append extension
+        ld      de, FILE_NAME_BUFFER
+        call    AppendFileNameExtension         
+        
+        ld      hl, (MUSIC_DATA_POINTER)        ; HL = resource destination address
+        ld      de, FILE_NAME_BUFFER
+        call    LoadBinaryFile
+
+        or      a                               ; exit if error occured
+        jp      nz, ReturnToBasic        
+
+        ret
 
 DrawMenu:
         call    SetPaging_U0_U1_VID_SYS        ; page in video memory
 
-        ld      a, 0                            ; Count menu items while drawing
-        ld      (COLLECTION_COUNT), a
-        ld      iy, GAMES_COLLECTION
-
-LNextMenuItem:
-        ld      a, (IY+GamesCollection.Count)   ; check for last item in the list
-        or      a
-        jr      nz, LMenuNextItem
-
-        call    SetPaging_U0_U1_U2_SYS         ; restore paging
-        ret
-
-LMenuNextItem:
-        ld      a, (COLLECTION_COUNT)           ; check for selected collection index
-        ld      b, a
-        ld      a, (COLLECTION_INDEX)           ; load selected index
-        cp      a, b
-        jr      nz, LNotSelected
-
-        ; update collection information
-        ld      a, (IY+GamesCollection.Count)   ; check for last item in the list
-        ld      (IMAGE_COUNT), a
-
-        ld      a, (IY+GamesCollection.Index)
-        ld      (IMAGE_INDEX), a
-
-        ld      a, (IY+GamesCollection.YearDec)
-        ld      (YEAR_DEC), a
-
-        ld      a, (IY+GamesCollection.YearDec+1)
-        ld      (YEAR_DEC+1), a
-
-        ld      a, (IY+GamesCollection.Collection)
-        ld      (COLLECTION), a
-
-        ld      a, (IY+GamesCollection.Collection+1)
-        ld      (COLLECTION+1), a
-
         ; set selected colors
-        ld      a, 13
-        call    SetCharacterBackgroundColor
-
-        ld      a, 32+5
-        call    SetCharColor
-
-        jr      LDrawMenu
-
-LNotSelected:
-        ; set non-selected color
         ld      a, 15
         call    SetCharacterBackgroundColor
 
-        ld      a, 32+5
+        ld      a, 3
         call    SetCharColor
 
-LDrawMenu:
-        ld      c, 0
-        call    GetMenuCoordinates
-        ld      a, 10
-        call    DrawHorizontalLine
-
-        ld      c, 1
-        call    GetMenuCoordinates
-        ld      a, 10
-        call    DrawHorizontalLine
-
         ; year text addess
-        push    iy
-        pop     hl
+        ld      hl, (CURRENT_COLLECTION)
         ld      bc, GamesCollection.Year
         add     hl, bc
 
+        ld      de, YEAR_BUFFER+2              ; copy year to the buffer
+        ld      bc, 4
+        ldir
+
         ; draw year
-        ld      c, 2
-        call    GetMenuCoordinates
-        ld      d, 8
+        ld      hl, YEAR_BUFFER
+        ld      bc, $1830
+        ld      d, YEAR_BUFFER_LENGTH
         call    DrawStr
 
-        ld      c, 7
-        call    GetMenuCoordinates
-        ld      a, 10
-        call    DrawHorizontalLine
+        call    SetPaging_U0_U1_U2_SYS         ; restore paging
 
-        ld      c, 8
-        call    GetMenuCoordinates
-        ld      a, 10
-        call    DrawHorizontalLine
+        ret
 
-        ld      hl, COLLECTION_COUNT
-        inc     (hl)
+DrawLoadingText:
+        call    SetPaging_U0_U1_VID_SYS        ; page in video memory
 
-        ld      bc, GamesCollection
-        push    iy
-        pop     hl
-        add     hl, bc
-        push    hl
-        pop     iy
+        ; set selected colors
+        ld      a, 15
+        call    SetCharacterBackgroundColor
 
-        jp      LNextMenuItem
+        ld      a, 3
+        call    SetCharColor
 
-        ;---------------------------------------------------------------------
-        ; Calculates menu item coordinates
-        ; Input:  C - Offset within the menu item
-        ; Output: B - X coordinate of the menuitem
-        ;         C - Y coordiante of the menuitem
-GetMenuCoordinates:
-        ld      a, (COLLECTION_COUNT)           ; load current index
-        ld      b, a
-        add     a, a                            ; multiply by 9
-        add     a, a
-        add     a, a
-        add     a, b
+        ; draw loading text
+        ld      hl, LOADING_TEXT
+        ld      bc, $1830
+        ld      d, LOADING_TEXT_LENGTH
+        call    DrawStr
 
-        add     a, c                            ; add offset to the position
+        call    SetPaging_U0_U1_U2_SYS         ; restore paging
 
-        ld      c, $21                          ; First menu item Y pos
-        add     a, c
-        ld      c, a                            ; Y coorinate to c register
-        ld      b, $1c                          ; X coordinate
         ret
 
         ;---------------------------------------------------------------------
@@ -477,20 +541,9 @@ GetMenuCoordinates:
         ; Input: -
         ; Output: -
 SaveSelectionCollectionPos:
-        ld      a, (COLLECTION_INDEX)           ; calculate Index address of the current collection
-        ld      b,  a                           ; HL = COLLECTION_INDEX * sizeof(GamesCollection) + GamesCollection.Index
-        ld      hl, GAMES_COLLECTION + GamesCollection.Index
-        ld      de, GamesCollection
-        or      a
-        jr      z, LStorePos
-
-LCalculatePosAddres:
-        add     hl, de
-        djnz    LCalculatePosAddres
-
-LStorePos:
+        ld      ix, (CURRENT_COLLECTION)
         ld      a, (IMAGE_INDEX)                ; save pos
-        ld      (hl), a
+        ld      (ix+GamesCollection.Index), a
 
         ret
 
@@ -762,7 +815,7 @@ index_ok:
 
         ld      bc, GamesInfo.Title
         add     hl, bc
-        ld      bc, (COLLECTION)
+        ld      bc, GAMES_INFO
         add     hl, bc
 
         ld      bc, $0141
@@ -800,7 +853,7 @@ GetCurrentGamesInfoAddress:
         add     hl, bc
 
         add     hl, de
-        ld      bc, (COLLECTION)
+        ld      bc, GAMES_INFO
         add     hl, bc
 
         ret
@@ -811,7 +864,7 @@ GetCurrentGamesInfoAddress:
         ;         DE - target buffer
 DecompressGameScreen:
         ld      bc, GamesInfo
-        ld      hl, (COLLECTION)
+        ld      hl, GAMES_INFO
         or      a
         jr      z, LDecompressNoMultiply
 
@@ -825,7 +878,9 @@ LDecompressNoMultiply:
         inc     hl
         ld      h, (hl)
         ld      l, a
-        inc     hl                              ; skip size
+        ld      bc, GAMES_INFO - 3              ; skip resource file header (file length 2 bytes,game count 1 bytes)
+        add     hl, bc
+        inc     hl                              ; skip image size
         inc     hl
 
         call    SetPaging_U0_U1_U2_U3
@@ -842,8 +897,44 @@ HIDE_PALETTE:
 RESULTS_END_STRING:
         db      "@", 0
 
+        if      LOADERTYPE == 1
 CARTRIDGE_STRING:
-        db      "CARTRIDGE", 0
+        db      "MEGACART", 0
+        endif
+
+        if      LOADERTYPE == 2
+CARTRIDGE_STRING:
+        db      "MULTICART", 0
+        endif
+
+        if      LOADERTYPE == 3
+CARTRIDGE_STRING:
+        db      "LOADER", 0
+        endif
+
+TVC_GAMES_STRING:
+        db      "TVC GAMES", 0
+
+DATES_STRING:
+        if      LOADERTYPE != LOADER_FILE
+        db      "2019-2022", 0
+        else
+        db      "2021-2022", 0
+        endif
+
+BIN_FILE_EXTENSION:
+        db      ".BIN", 0
+
+MUS_FILE_EXTENSION:
+        db      ".MUS", 0
+
+LOADING_TEXT:
+        db      " LOADING"
+LOADING_TEXT_LENGTH     equ $-LOADING_TEXT
+
+YEAR_BUFFER:
+        db      "  ....  "
+YEAR_BUFFER_LENGTH     equ $-YEAR_BUFFER
 
 FILENAME_VARIABLE:
         db      "N$"
@@ -853,6 +944,14 @@ FILENAME_VARIABLE:
         include "chars.a80"
         include "tvcfunctions.a80"
         include "gamesinfo.a80"
-        include "musicplayer.a80"
+        include "psgplayer.a80"
 
         include "resources.a80"
+
+RESOURCE_LOAD_ADDRESS:
+
+GAMES_INFO_COUNT:
+        db      0               ; Number of games in the current collection
+
+GAMES_INFO:
+        end

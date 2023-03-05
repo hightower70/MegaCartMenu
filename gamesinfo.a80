@@ -1,182 +1,42 @@
-        struct GamesInfo
-Image   dw 0
-Title   text 32, {0}
-File    text 16, {0}
-        ends
-
         struct GamesCollection
-Count           byte 0
 Index           byte 0
 Year            text 7, {0}
 YearDec         dw 0
-Collection      word  
+File            text 9, {0}
         ends
 
-games_info2019:
-        GamesInfo {
-        ikplus
-        ;|                               | 
-        {"DOBERDO BROTHERS: INTERKARATE +"}
-        {"STARTIK.CAS"}
-        }         
-        GamesInfo {
-        fuss
-        {"        BERYSOFT: FUSS!        "}
-        {"FUSS.CAS"}
-        }           
-        GamesInfo {
-        dkj
-        {"KISS KAROLY: DONKEY KONG JUNIOR"}
-        {"DKJR.CAS"}
-        }    
-        GamesInfo {
-        crossfire
-        {"    KOLLAR ZOLTAN: CROSSFIRE   "}
-        {"CROSSFIR.CAS"}
-        }                  
-        GamesInfo {
-        gombocfalo
-        {"      SZIPUCSU: GOMBOCFALO     "}
-        {"GOMEX.CAS"}
-        }                  
-        GamesInfo {
-        filler
-        {"       G0BLINISH: FILLER       "}
-        {"FILLER.CAS"}
-        }     
-
-
-games_info2020:
-        GamesInfo {
-        puckman
-        ;|                               | 
-        {"   DOBERDO BROTHERS: PUCKMAN   "}
-        {"STARTPAC.CAS"}
-        }         
-        GamesInfo {
-        ikari
-        {"  PERZSA NOEL: IKARI WARRIORS  "}
-        {"IKARI.CAS"}
-        }           
-        GamesInfo {
-        renagade
-        {"     PERZSA NOEL: RENEGADE     "}
-        {"RENEGADE.CAS"}
-        }    
-        GamesInfo {
-        quadrillion
-        {"    PERZSA NOEL: QUADRILLION   "}
-        {"QUADR.CAS"}
-        }                  
-        GamesInfo {
-        vote
-        {"     KISS KAROLY: VOTE2020     "}
-        {"VOTE.CAS"}
-        }                  
-        GamesInfo {
-        xorgame
-        {"      SZIPUCSU: XORGAME 2      "}
-        {"XORGAME.CAS"}
-        }                  
-        GamesInfo {
-        bomber
-        {"     SZIPUCSU: BOMBER 2IN1     "}
-        {"BOMBER2.CAS"}
-        }  
-        GamesInfo {
-        multitetris
-        {"   BANA G. PETER: MULTITETRIS  "}
-        {"MULTITET.CAS"}
-        }  
-
-games_info2021:
-        GamesInfo {
-        im
-        ;|                               | 
-        {"DOBERDO BROTHERS: IMPOSSIBLE M."}
-        {"STARTIM.CAS"}
-        }         
-        GamesInfo {
-        bomberman
-        {"      BERYSOFT: BOMBERMAN      "}
-        {"BOMBMAN.CAS"}
-        }   
-        GamesInfo {
-        nebulus
-        {"     PERZSA NOEL: NEBULUS      "}
-        {"NEBULUS.CAS"}
-        }           
-        GamesInfo {
-        lode_runner
-        {"KOLLAR Z. PERZSA N. LODE RUNNER"}
-        {"TL.CAS"}
-        }     
-        GamesInfo {
-        sotet_kastely
-        {"  OROSZ OLIVER: SOTET KASTELY  "}
-        {"SOTETKAS.CAS"}
-        }   
-        GamesInfo {
-        gunfright
-        {"     PERZSA NOEL: GUNFRIGHT    "}
-        {"GUNFRIGH.CAS"}
-        }                  
-        GamesInfo {
-        mp_soccer
-        {"PERZSA NOEL: MICROPROSE SOCCER "}
-        {"MPSOCCER.CAS"}
-        }                  
-        GamesInfo {
-        snake
-        {"      VASS SANDOR: SNAKES      "}
-        {"SNAKES.CAS"}
-        }               
-        GamesInfo {
-        red_october
-        {"HP: VADASZAT A VOROS OKTOBERREL"}
-        {"VOROSOKT.CAS"}
-        }  
-        GamesInfo {
-        tankwars
-        {"    ELOD E. IMRE: TANK WARS    "}
-        {"TANKWARS.CAS"}
-        }     
-        GamesInfo {
-        raster_runner
-        {"   PERZSA NOEL: RASTER RUNNER  "}
-        {"RASTER.CAS"}
-        }    
-        GamesInfo {
-        fogo
-        {"      OROSZ OLIVER: FOGO       "}
-        {"FOGO2021.CAS"}
-        } 
-              
-
+GAMES_COLLECTION_COUNT:
+        db      (GAMES_COLLECTION_END - GAMES_COLLECTION) / GamesCollection
 
 GAMES_COLLECTION:
         GamesCollection {
-        6
         0
-        { " 2019 "}
-        1901
-        games_info2019
-        }
+        { "2022"}
+        2201
+        { "RES2022" }
+        }  
+
         GamesCollection {
-        8
         0
-        { " 2020 "}
-        2001
-        games_info2020
-        }
-        GamesCollection {
-        12
-        0
-        { " 2021 "}
+        { "2021"}
         2101
-        games_info2021
-        }
+        { "RES2021" }
+        } 
+
+        if      LOADERTYPE != LOADER_FILE
         GamesCollection {
         0
+        { "2020"}
+        2001
+        { "RES2020" }
+        } 
+
+        GamesCollection {
         0
+        { "2019"}
+        1901
+        { "RES2019" }
         }
+        endif
+
+GAMES_COLLECTION_END

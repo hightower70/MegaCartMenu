@@ -221,7 +221,119 @@ dzx7t_load_bits:
         inc	hl
         rla
         ret
-				
 
 SAVED_MEM_PAGES  db     0
 SAVED_GRAPH_MODE db     0
+
+        ;---------------------------------------------------------------------
+        ; Copy file name from zero terminated string to TVC format (length+string)
+        ; Input:  HL - Source address of the zero terminated string
+        ;         DE - Destination address of the file name
+CopyFileName:
+        push    de
+        inc     de
+        ld      b, 0
+
+LCopyFileNameLoop:
+        ld      a, (hl)                 ; check terminating zero
+        or      a
+        jr      z, LCopyFileNameExit
+
+        ld      (de), a                 ; copy file name chacter
+        inc     hl
+        inc     de
+
+        inc     b                       ; update and check file name length
+        ld      a, b
+        cp      a, FILE_NAME_LENGTH
+        jr      c, LCopyFileNameLoop
+
+LCopyFileNameExit
+        pop     hl                      ; store file name length
+        ld      (hl), b
+        
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Append extension to the file name
+        ; Input:  HL - Source address of the zero terminated extension string
+        ;         DE - Address of the file name buffer
+AppendFileNameExtension:
+        push    de
+        ex      hl,de
+        ld      c, (hl)                 ; get current file name length
+        ld      b, 0
+        inc     hl
+        add     hl, bc
+        ex      hl, de
+        
+LAppendFileNameExtensionLoop:
+        ld      a, (hl)
+        or      a
+        jr      z, LAppendFileNameExtensionExit
+
+        ld      (de), a
+        inc     hl
+        inc     de
+        inc     c
+        ld      a, c
+        cp      a, FILE_NAME_LENGTH
+        jr      c, LAppendFileNameExtensionLoop
+
+LAppendFileNameExtensionExit:
+        pop     hl
+        ld      (hl), c
+        
+        ret
+
+        ;---------------------------------------------------------------------
+        ; Loads a binary file from the file system
+        ; Input:  HL - Destination address of the file
+        ;         DE - Name of the file
+        ; Output: A - Error code, 0 = no error
+        ;         HL - Length of the file
+LoadBinaryFile:
+        ld      (SAVED_DESTINATION_ADDRESS), hl         ; save destination address
+
+        rst     30h                                     ; open file
+        db      CAS_FN_OPEN
+
+        or      a                                       ; return if error occured
+        ret     nz
+
+        rst     30h                                     ; load file length low byte
+        db      CAS_FN_CHIN
+
+        or      a
+        ret     nz
+
+        ld      a, c
+        ld      (SAVED_FILE_LENGTH), a
+
+        rst     30h                                     ; load file length high byte
+        db      CAS_FN_CHIN
+
+        or      a
+        ret     nz
+
+        ld      a, c
+        ld      (SAVED_FILE_LENGTH+1), a
+
+        ld      bc, (SAVED_FILE_LENGTH)                 ; load binary file
+        ld      de, (SAVED_DESTINATION_ADDRESS)
+        rst     30h
+        db      CAS_FN_BKIN
+
+        or      a
+        ret     nz
+
+        rst     30h                                     ; close file
+        db      CAS_FN_CLOSE_RD
+
+        ld      hl, (SAVED_FILE_LENGTH)
+
+        ret
+
+SAVED_DESTINATION_ADDRESS        dw      0               ; destination address save for load binary file function
+SAVED_FILE_LENGTH                dw      0               ; saved binary file length
+

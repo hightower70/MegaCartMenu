@@ -1,10 +1,16 @@
-; Cartridge start memory address
+; Memory start address for the program
 PROGRAM_START_ADDRESS   equ 6639
+
+LOADERTYPE       equ 1          ; Type if the loader (1 - Megacart, 2 - Multicart, 3 - File system loader)
+LOADER_MEGACART  equ 1
+LOADER_MULTICART equ 2
+LOADER_FILE      equ 3
 
 ; System memory addresses
 P_SAVE           equ $0003      ; Memory page save (mirror for port 02h)
 GRAPH_MODE	 equ $0B13	; Graphics mode save (mirror for port 06h)
 CHAIN            equ $1724      ; Last symbol in the symbol table
+OUT_ASSIGN       equ $0b0a      ; Editor output assign (used for disabling 'search' and 'found' messages)
 INK              equ $0b4d      ; Ink color 
 PAPER            equ $0b4e      ; Paper color
 BORDER           equ $0b4f      ; Border color register
@@ -39,6 +45,12 @@ KBD_STATUS      equ $93
 VMODE           equ $04
 PAL             equ $0c
 
+; RST30h casette functions
+CAS_FN_OPEN     EQU $D3
+CAS_FN_CHIN     EQU $D1
+CAS_FN_BKIN     EQU $D2
+CAS_FN_CLOSE_RD EQU $D4
+
 ; Keyboard codes
 JOY_RIGHT       equ $04
 JOY_LEFT        equ $13
@@ -46,6 +58,7 @@ JOY_UP          equ $05
 JOY_DOWN        equ $18
 JOY_FIRE        equ $06
 RETURN          equ $0d
+ESCAPE          equ $1b
 
 ; screen coordinates
 SCREEN_WIDTH              equ 64       ; TVC screen width in bytes
@@ -61,3 +74,6 @@ RIGHT_IMAGE_WIDTH         equ 14       ; Right game screen width in bytes
 
 ; Scroll delay
 SCROLL_DELAY    equ 2
+
+; file constants
+FILE_NAME_LENGTH        equ 12         ; file name length 8+3 (+dot+)

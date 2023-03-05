@@ -1,0 +1,4174 @@
+# file opened: megamenu.a80
+  1   0000
+  2   0000                      .include "definitions.a80"
+# file opened: definitions.a80
+  1+  0000              ; Memory start address for the program
+  2+  0000              PROGRAM_START_ADDRESS   equ 6639
+  3+  0000
+  4+  0000              LOADERTYPE       equ 1          ; Type if the loader (1 - Megacart, 2 - Multicart, 3 - File system loader)
+  5+  0000              LOADER_MEGACART  equ 1
+  6+  0000              LOADER_MULTICART equ 2
+  7+  0000              LOADER_FILE      equ 3
+  8+  0000
+  9+  0000              ; System memory addresses
+ 10+  0000              P_SAVE           equ $0003      ; Memory page save (mirror for port 02h)
+ 11+  0000              GRAPH_MODE	 equ $0B13	; Graphics mode save (mirror for port 06h)
+ 12+  0000              CHAIN            equ $1724      ; Last symbol in the symbol table
+ 13+  0000              OUT_ASSIGN       equ $0b0a      ; Editor output assign (used for disabling 'search' and 'found' messages)
+ 14+  0000              INK              equ $0b4d      ; Ink color
+ 15+  0000              PAPER            equ $0b4e      ; Paper color
+ 16+  0000              BORDER           equ $0b4f      ; Border color register
+ 17+  0000              VIDEOMEM         equ $8000      ; start of the video memory
+ 18+  0000              U3_ADDRESS       equ $c000      ; U3 RAM address
+ 19+  0000              U3_SIZE          equ $4000      ; U3 RAM size
+ 20+  0000              IT_VECTOR_ADDR   equ $003e      ; jump vector address of the interrupt
+ 21+  0000
+ 22+  0000              ; Memory addresses
+ 23+  0000              IMAGE_BUFFER0   equ $c000
+ 24+  0000              IMAGE_BUFFER1   equ $d000
+ 25+  0000              IMAGE_BUFFER2   equ $e000
+ 26+  0000
+ 27+  0000              ; Port definitions
+ 28+  0000              PAGE_REG          equ $02
+ 29+  0000              GRAPHICS_MODE_REG equ $06
+ 30+  0000
+ 31+  0000              CRTC_ADDRESS      equ $70
+ 32+  0000              CRTC_DATA         equ $71
+ 33+  0000
+ 34+  0000              ; Memory paging constants
+ 35+  0000              P_U0_U1_U2_SYS   equ $70
+ 36+  0000              P_U0_U1_U2_CART  equ $30
+ 37+  0000              P_SYS_U1_U2_CART equ $20
+ 38+  0000              P_U0_U1_VID_SYS  equ $50
+ 39+  0000              P_U0_U1_U2_U3    equ $b0
+ 40+  0000              P_U0_U1_VID_U3   equ $90
+ 41+  0000
+ 42+  0000              ; RST30h function codes
+ 43+  0000              KBD_CHIN        equ $91
+ 44+  0000              KBD_STATUS      equ $93
+ 45+  0000              VMODE           equ $04
+ 46+  0000              PAL             equ $0c
+ 47+  0000
+ 48+  0000              ; RST30h casette functions
+ 49+  0000              CAS_FN_OPEN     EQU $D3
+ 50+  0000              CAS_FN_CHIN     EQU $D1
+ 51+  0000              CAS_FN_BKIN     EQU $D2
+ 52+  0000              CAS_FN_CLOSE_RD EQU $D4
+ 53+  0000
+ 54+  0000              ; Keyboard codes
+ 55+  0000              JOY_RIGHT       equ $04
+ 56+  0000              JOY_LEFT        equ $13
+ 57+  0000              JOY_UP          equ $05
+ 58+  0000              JOY_DOWN        equ $18
+ 59+  0000              JOY_FIRE        equ $06
+ 60+  0000              RETURN          equ $0d
+ 61+  0000              ESCAPE          equ $1b
+ 62+  0000
+ 63+  0000              ; screen coordinates
+ 64+  0000              SCREEN_WIDTH              equ 64       ; TVC screen width in bytes
+ 65+  0000              GAME_IMAGE_WIDTH          equ 32       ; Game screen width in bytes
+ 66+  0000
+ 67+  0000              LEFT_IMAGE_COORDINATES    equ 88*SCREEN_WIDTH+VIDEOMEM
+ 68+  0000              CENTER_IMAGE_COORDINATES  equ 88*SCREEN_WIDTH+32/2+VIDEOMEM
+ 69+  0000              RIGHT_IMAGE_COORDINATES   equ 88*SCREEN_WIDTH+100/2+VIDEOMEM
+ 70+  0000
+ 71+  0000              GAME_IMAGE_HEIGHT         equ 120      ; Game screen height in lines
+ 72+  0000              LEFT_IMAGE_OFFSET         equ 18       ; Left game screen width in bytes
+ 73+  0000              RIGHT_IMAGE_WIDTH         equ 14       ; Right game screen width in bytes
+ 74+  0000
+ 75+  0000              ; Scroll delay
+ 76+  0000              SCROLL_DELAY    equ 2
+ 77+  0000
+ 78+  0000              ; file constants
+ 79+  0000              FILE_NAME_LENGTH        equ 12         ; file name length 8+3 (+dot+)
+ 80+  0000
+# file closed: definitions.a80
+  3   0000                      .include "gamesinfo.inc"
+# file opened: gamesinfo.inc
+  1+  0000                      struct GamesInfo
+  2+  0000 ~            Image   dw 0
+  3+  0000 ~            Title   text 32, {0}
+  4+  0000 ~            File    text 16, {0}
+  5+  0000                      ends
+# file closed: gamesinfo.inc
+  4   0000
+  5   0000                      org     PROGRAM_START_ADDRESS
+  6   19EF
+  7   19EF                      ; BASIC program
+  8   19EF 0B 01 00 F5          db      $0b, $01, $00, $f5, $20, $4e, $24, $a8, $31, $36, $ff                                         ; 1 DIM N$*16
+  8   19F3 20 4E 24 A8
+  8   19F7 31 36 FF
+  9   19FA 0F 02 00 58          db      $0f, $02, $00, $58, $9a, "USR", $96, "6722", $95, $ff                                         ; 2 X=USR(6722)
+  9   19FE 9A 55 53 52
+  9   1A02 96 36 37 32
+  9   1A06 32 95 FF
+ 10   1A09 12 03 00 ED          db      $12, $03, $00, $ed, $20, $4e, $24, $9d, $22, $22, $20, $b5, $20, $e8, $20, $4e, $24, $ff, $00 ; 3 IF N$<>"" THEN LOAD N$
+ 10   1A0D 20 4E 24 9D
+ 10   1A11 22 22 20 B5
+ 10   1A15 20 E8 20 4E
+ 10   1A19 24 FF 00
+ 11   1A1C
+ 12   1A1C                      ; BASIC SYMBOL TABLE
+ 13   1A1C 00 00 00...          ds      38                              ; Storage for BASIC symbol table
+ 14   1A42
+ 15   1A42                      ; Program start
+ 16   1A42 18 27                jr      START
+ 17   1A44
+ 18   1A44                      ; ** Variables **
+ 19   1A44
+ 20   1A44 00 00        IX_SAVE  dw     0                               ; Saves IX, and IY registers and shadow registers because it is used by the basic
+ 21   1A46 00 00        IY_SAVE  dw     0
+ 22   1A48 00 00        BCS_SAVE dw     0
+ 23   1A4A 00 00        DES_SAVE dw     0
+ 24   1A4C 00 00        HLS_SAVE dw     0
+ 25   1A4E
+ 26   1A4E 00           CURRENT_COLLECTION_INDEX db      0               ; Current game collection (year) index
+ 27   1A4F 00 00        CURRENT_COLLECTION       dw      0               ; Current game collection pointer
+ 28   1A51
+ 29   1A51 00           IMAGE_INDEX             db      0               ; Current game (middle image in the caroussel) index in the current collection
+ 30   1A52 00           IMAGE_COUNT             db      0               ; Number of games in the current collection
+ 31   1A53
+ 32   1A53 00 00        YEAR_DEC                dw      0               ; Current collection's year. Last two digits of year multiplied by 100 (eg. 2019 -> 1900)
+ 33   1A55
+ 34   1A55                      ; Image buffer addresses
+ 35   1A55              LEFT_IMAGE_ADDRESS:                             ; Image buffer addres for the left image in the caroussel
+ 36   1A55 00 C0                dw      IMAGE_BUFFER0
+ 37   1A57
+ 38   1A57              CENTER_IMAGE_ADDRESS:                           ; Image buffer addres for the middle image in the caroussel
+ 39   1A57 00 D0                dw      IMAGE_BUFFER1
+ 40   1A59
+ 41   1A59              RIGHT_IMAGE_ADDRESS:                            ; Image buffer addres for the right image in the caroussel
+ 42   1A59 00 E0                dw      IMAGE_BUFFER2
+ 43   1A5B
+ 44   1A5B              FILE_NAME_BUFFER:
+ 45   1A5B 00 00 00...          ds FILE_NAME_LENGTH+1                   ; File name buffer
+ 46   1A68
+ 47   1A68              MUSIC_DATA_POINTER:
+ 48   1A68 00 00                dw      0                               ; Music file data pointer
+ 49   1A6A
+ 50   1A6A              EXIT_MODE:
+ 51   1A6A 00                   db      0                               ; Exit mode: 0 - disable screen display (for loading program file), 1 - enable screen display (for normal exit)
+ 52   1A6B
+ 53   1A6B                      ; ** Program start **
+ 54   1A6B              START:
+ 55   1A6B                      ; save IX, IY
+ 56   1A6B DD 22 44 1A          ld      (IX_SAVE), ix
+ 57   1A6F FD 22 46 1A          ld      (IY_SAVE), iy
+ 58   1A73
+ 59   1A73                      ; save some shadow registers
+ 60   1A73 D9                   exx
+ 61   1A74 ED 43 48 1A          ld      (BCS_SAVE), bc
+ 62   1A78 ED 53 4A 1A          ld      (DES_SAVE), de
+ 63   1A7C 22 4C 1A             ld      (HLS_SAVE), hl
+ 64   1A7F D9                   exx
+ 65   1A80
+ 66   1A80                      ; set video mode to 16 color
+ 67   1A80 0E 02                ld      c, 2
+ 68   1A82 F7                   rst     30h
+ 69   1A83 04                   db      $04
+ 70   1A84
+ 71   1A84                      ; set CRTC interrupt position to the original value (floppy controller might change it)
+ 72   1A84 3E 0E                ld      a, 14
+ 73   1A86 D3 70                out     (CRTC_ADDRESS), a
+ 74   1A88 3E 0E                ld      a, $0e
+ 75   1A8A D3 71                out     (CRTC_DATA), a
+ 76   1A8C
+ 77   1A8C 3E 0F                ld      a, 15
+ 78   1A8E D3 70                out     (CRTC_ADDRESS), a
+ 79   1A90 3E FF                ld      a, $ff
+ 80   1A92 D3 71                out     (CRTC_DATA), a
+ 81   1A94
+ 82   1A94                      ; set border color to white
+ 83   1A94 3E AA                ld      a, $aa
+ 84   1A96 32 4F 0B             ld      (BORDER), a
+ 85   1A99
+ 86   1A99                      ; show main screen
+ 87   1A99 CD 36 2D             call    SetPaging_U0_U1_VID_SYS        ; page in video memory
+ 88   1A9C
+ 89   1A9C 21 E0 30             ld      hl, megaplex+2                 ; decompress main screen
+ 90   1A9F 11 00 80             ld      de, VIDEOMEM
+ 91   1AA2 CD 9E 2D             call    dzx7_turbo
+ 92   1AA5
+ 93   1AA5                      ; draw 'cartridge' text
+ 94   1AA5 3E 00                ld      a, 0
+ 95   1AA7 CD 42 29             call    SetCharacterBackgroundColor
+ 96   1AAA
+ 97   1AAA 3E 15                ld      a, 16+5
+ 98   1AAC CD 57 29             call    SetCharColor
+ 99   1AAF
+100   1AAF 01 1F 28             ld      bc, $281f
+101   1AB2 21 EE 1E             ld      hl, CARTRIDGE_STRING
+102   1AB5 16 FF                ld      d, 255
+103   1AB7 CD B6 2A             call    DrawStr
+104   1ABA
+105   1ABA                      ; draw 'TVC GAMES COLLECTION' string
+106   1ABA 01 27 02             ld      bc, $0227
+107   1ABD 21 F7 1E             ld      hl, TVC_GAMES_STRING
+108   1AC0 16 FF                ld      d, 255
+109   1AC2 CD B6 2A             call    DrawStr
+110   1AC5
+111   1AC5                      ; draw dates string
+112   1AC5 01 27 2D             ld      bc, $2d27
+113   1AC8 21 01 1F             ld      hl, DATES_STRING
+114   1ACB 16 FF                ld      d, 255
+115   1ACD CD B6 2A             call    DrawStr
+116   1AD0
+117   1AD0 CD 3B 2D             call    SetPaging_U0_U1_U2_SYS        ; restore paging
+118   1AD3
+119   1AD3                      ; disable 'search' and 'found' messages at file load
+120   1AD3 AF                   xor     a
+121   1AD4 32 0A 0B             ld      (OUT_ASSIGN), a
+122   1AD7
+123   1AD7                      ; detect sound card
+124   1AD7 CD C5 2E             call    DetectSndCard
+125   1ADA
+126   1ADA                      ; Init and draw menu
+127   1ADA 21 52 2E             ld      hl, GAMES_COLLECTION
+128   1ADD 22 4F 1A             ld      (CURRENT_COLLECTION), hl
+129   1AE0 AF                   xor     a
+130   1AE1 32 4E 1A             ld      (CURRENT_COLLECTION_INDEX), a
+131   1AE4
+132   1AE4 CD 79 1C             call    LoadCollectionResources
+133   1AE7
+134   1AE7 CD EC 1C             call    DrawMenu
+135   1AEA
+136   1AEA                      ; Init caroussel
+137   1AEA AF                   xor     a
+138   1AEB 32 51 1A             ld      (IMAGE_INDEX), a
+139   1AEE CD 3E 1D             call    InitCarousel
+140   1AF1
+141   1AF1                      ; init sound card
+142   1AF1 3A 9F 2E             ld      a, (SndCardType)                ; check if card existing
+143   1AF4 B7                   or      a
+144   1AF5 28 0C                jr      z, NoCardToInit
+145   1AF7
+146   1AF7 CD 48 2F             call    InitMusicPlayer                 ; Initializes music player
+147   1AFA
+148   1AFA 2A 68 1A             ld      hl, (MUSIC_DATA_POINTER)        ; load PSG music address
+149   1AFD 22 AF 2E             ld      (PSGFile), hl
+150   1B00 CD 4D 2F             call    StartMusic                      ; Starts music playing
+151   1B03
+152   1B03              NoCardToInit:
+153   1B03                      ; initialize interrupt handler
+154   1B03 CD 27 1F             call    InitInterrupt
+155   1B06
+156   1B06                      ; init text scroll
+157   1B06 CD 5C 1F             call    InitTextScroll
+158   1B09
+159   1B09                      ; waits for user's keyboard input
+160   1B09              WaitForKey:
+161   1B09 76                   halt                                    ; wait for interrupt (and keyboard scan)
+162   1B0A
+163   1B0A F7                   rst     30h                             ; read keyboard status
+164   1B0B 93                   db      KBD_STATUS
+165   1B0C 79                   ld      a, c
+166   1B0D FE FF                cp      a, $ff
+167   1B0F 20 F8                jr      nz, WaitForKey                  ; if no key pressed -> wait
+168   1B11
+169   1B11 F7                   rst     30h                             ; when key is pressed
+170   1B12 91                   db      KBD_CHIN
+171   1B13
+172   1B13 79                   ld      a, c                            ; check for joystick keys
+173   1B14 FE 13                cp      JOY_LEFT
+174   1B16 CA 37 1C             jp      z, move_left
+175   1B19
+176   1B19 FE 04                cp      JOY_RIGHT
+177   1B1B CA F6 1B             jp      z, MoveRight
+178   1B1E
+179   1B1E FE 05                cp      JOY_UP
+180   1B20 CA A7 1B             jp      z, MoveUp
+181   1B23
+182   1B23 FE 18                cp      JOY_DOWN
+183   1B25 CA E5 1B             jp      z, MoveDown
+184   1B28
+185   1B28 FE 06                cp      JOY_FIRE                        ; chack for start program keys
+186   1B2A CA 97 1B             jp      z, RunProgram
+187   1B2D
+188   1B2D FE 0D                cp      RETURN
+189   1B2F CA 97 1B             jp      z, RunProgram
+190   1B32
+191   1B32 FE 1B                cp      ESCAPE
+192   1B34 C2 09 1B             jp      nz, WaitForKey
+193   1B37
+194   1B37                      ; exit from the program
+195   1B37 3E 01                ld      a, 1
+196   1B39 18 01                jr      StoreExitMode
+197   1B3B
+198   1B3B              ReturnToBasic:
+199   1B3B AF                   xor     a
+200   1B3C              StoreExitMode:
+201   1B3C 32 6A 1A             ld      (EXIT_MODE), a
+202   1B3F
+203   1B3F                      ; restore interrupt
+204   1B3F CD 36 1F             call    RestoreInterrupt
+205   1B42
+206   1B42                      ; stop music playback
+207   1B42 3A 9F 2E             ld      a, (SndCardType)                ; check if card is exists
+208   1B45 B7                   or      a
+209   1B46 28 03                jr      z, NoCardToDeinit
+210   1B48
+211   1B48 CD 69 2F             call    StopMusic
+212   1B4B
+213   1B4B              NoCardToDeinit:
+214   1B4B                      ; Clear U3 RAM
+215   1B4B CD 40 2D             call    SetPaging_U0_U1_U2_U3
+216   1B4E
+217   1B4E 21 00 C0             ld      hl, U3_ADDRESS
+218   1B51 11 01 C0             ld      de, U3_ADDRESS + 1
+219   1B54 01 FE 3F             ld      bc, U3_SIZE - 2
+220   1B57 36 00                ld      (hl), 0
+221   1B59 ED B0                ldir
+222   1B5B
+223   1B5B CD 3B 2D             call    SetPaging_U0_U1_U2_SYS
+224   1B5E
+225   1B5E                      ; set border color to black
+226   1B5E 3E 00                ld      a, $00
+227   1B60 32 4F 0B             ld      (BORDER), a
+228   1B63
+229   1B63                      ; set video mode to 4 color
+230   1B63 0E 01                ld      c, 1
+231   1B65 F7                   rst     30h
+232   1B66 04                   db      VMODE
+233   1B67
+234   1B67 3A 6A 1A             ld      a, (EXIT_MODE)
+235   1B6A B7                   or      a
+236   1B6B 20 0F                jr      nz, ExitWithDisplay
+237   1B6D
+238   1B6D                      ; set ink to 1
+239   1B6D 3E 01                ld      a, 1
+240   1B6F 32 4D 0B             ld      (INK), a
+241   1B72
+242   1B72                      ; set paper to 0
+243   1B72 3E 00                ld      a, 0
+244   1B74 32 4E 0B             ld      (PAPER), a
+245   1B77
+246   1B77                      ; set first ink, paper palette color to black
+247   1B77 11 E8 1E             ld      de, HIDE_PALETTE
+248   1B7A F7                   rst     30h
+249   1B7B 0C                   db      PAL
+250   1B7C
+251   1B7C              ExitWithDisplay:
+252   1B7C                      ; restore editor output assign
+253   1B7C 3E 02                ld      a, 2
+254   1B7E 32 0A 0B             ld      (OUT_ASSIGN), a
+255   1B81
+256   1B81                      ; restore some shadow registers
+257   1B81 D9                   exx
+258   1B82 ED 4B 48 1A          ld      bc, (BCS_SAVE)
+259   1B86 ED 5B 4A 1A          ld      de, (DES_SAVE)
+260   1B8A 2A 4C 1A             ld      hl, (HLS_SAVE)
+261   1B8D D9                   exx
+262   1B8E
+263   1B8E                      ; restore IX, IY
+264   1B8E DD 2A 44 1A          ld      ix, (IX_SAVE)
+265   1B92 FD 2A 46 1A          ld      iy, (IY_SAVE)
+266   1B96
+267   1B96 C9                   ret
+268   1B97
+269   1B97                      ;---------------------------------------------------------------------
+270   1B97                      ; Runs selected program
+271   1B97                      ; Input:
+272   1B97                      ; Output:
+273   1B97                      ;
+274   1B97              RunProgram:
+275   1B97 11 22 00             ld      de, GamesInfo.File              ; Get file name from the game info of the current game
+276   1B9A CD AB 1E             call    GetCurrentGamesInfoAddress
+277   1B9D
+278   1B9D 11 25 1F             ld      de, FILENAME_VARIABLE           ; Copy file name to the basic variable
+279   1BA0 0E 02                ld      c, 2
+280   1BA2 CD 50 2D             call    LetStringVariable
+281   1BA5
+282   1BA5 18 94                jr      ReturnToBasic                   ; continue with the basic code
+283   1BA7
+284   1BA7                      ; Selects previous collection and updates the screen
+285   1BA7              MoveUp:
+286   1BA7 CD 33 1D             call    SaveSelectionCollectionPos
+287   1BAA 3A 4E 1A             ld      a, (CURRENT_COLLECTION_INDEX)
+288   1BAD B7                   or      a
+289   1BAE 20 06                jr      nz, LDecrementCollectionIndex
+290   1BB0
+291   1BB0 3A 51 2E             ld      a, (GAMES_COLLECTION_COUNT)
+292   1BB3 3D                   dec     a
+293   1BB4 18 01                jr      LStoreIndex
+294   1BB6
+295   1BB6              LDecrementCollectionIndex:
+296   1BB6 3D                   dec     a
+297   1BB7
+298   1BB7              LStoreIndex:
+299   1BB7 32 4E 1A             ld      (CURRENT_COLLECTION_INDEX), a    ; stores updated index
+300   1BBA
+301   1BBA                      ; calculate collection pointer HL = CURRENT_COLLECTION_INDEX * sizeof(GamesCollection)
+302   1BBA 47                   ld      b,  a                            ; set loop variable to collection index
+303   1BBB
+304   1BBB 21 52 2E             ld      hl, GAMES_COLLECTION             ; collection start address
+305   1BBE 11 13 00             ld      de, GamesCollection              ; Collection length
+306   1BC1 B7                   or      a
+307   1BC2 28 03                jr      z, LStoreCollectionPointer
+308   1BC4
+309   1BC4              LCalculateCollectionPointer:
+310   1BC4 19                   add     hl, de
+311   1BC5 10 FD                djnz    LCalculateCollectionPointer
+312   1BC7
+313   1BC7              LStoreCollectionPointer:
+314   1BC7 22 4F 1A             ld      (CURRENT_COLLECTION), hl        ; store pointer
+315   1BCA
+316   1BCA CD 69 2F             call    StopMusic                       ; Stops previous music
+317   1BCD
+318   1BCD CD 79 1C             call    LoadCollectionResources         ; load resources for the given year
+319   1BD0
+320   1BD0 CD EC 1C             call    DrawMenu                        ; update menu
+321   1BD3
+322   1BD3 CD 3E 1D             call    InitCarousel                    ; reinit carousel with the current collection
+323   1BD6
+324   1BD6 CD 85 1D             call    DrawCarousel                    ; update carousel
+325   1BD9
+326   1BD9 2A 68 1A             ld      hl, (MUSIC_DATA_POINTER)        ; load PSG music address
+327   1BDC 22 AF 2E             ld      (PSGFile), hl
+328   1BDF CD 4D 2F             call    StartMusic                      ; Starts music player
+329   1BE2
+330   1BE2 C3 09 1B             jp      WaitForKey
+331   1BE5
+332   1BE5                      ; Selects next collection and updates the screen
+333   1BE5              MoveDown:
+334   1BE5 CD 33 1D             call    SaveSelectionCollectionPos      ; saves position
+335   1BE8
+336   1BE8 3A 51 2E             ld      a, (GAMES_COLLECTION_COUNT)     ; increment collection index
+337   1BEB 47                   ld      b, a                            ; or wrap around if overflows
+338   1BEC 3A 4E 1A             ld      a, (CURRENT_COLLECTION_INDEX)
+339   1BEF 3C                   inc     a
+340   1BF0 B8                   cp      a, b
+341   1BF1 38 C4                jr      c, LStoreIndex
+342   1BF3
+343   1BF3 AF                   xor     a
+344   1BF4 18 C1                jr      LStoreIndex
+345   1BF6
+346   1BF6              MoveRight:
+347   1BF6 ED 4B 55 1A          ld      bc, (LEFT_IMAGE_ADDRESS)
+348   1BFA 2A 57 1A             ld      hl, (CENTER_IMAGE_ADDRESS)
+349   1BFD 22 55 1A             ld      (LEFT_IMAGE_ADDRESS), hl
+350   1C00 2A 59 1A             ld      hl, (RIGHT_IMAGE_ADDRESS)
+351   1C03 22 57 1A             ld      (CENTER_IMAGE_ADDRESS), hl
+352   1C06 ED 43 59 1A          ld      (RIGHT_IMAGE_ADDRESS), bc
+353   1C0A
+354   1C0A 3A 52 1A             ld      a, (IMAGE_COUNT)
+355   1C0D 47                   ld      b, a
+356   1C0E 3A 51 1A             ld      a, (IMAGE_INDEX)
+357   1C11 3C                   inc     a
+358   1C12 B8                   cp      a, b
+359   1C13 38 01                jr      c, move_right_1
+360   1C15
+361   1C15 AF                   xor     a
+362   1C16
+363   1C16              move_right_1:
+364   1C16 32 51 1A             ld      (IMAGE_INDEX), a
+365   1C19
+366   1C19 3C                   inc     a
+367   1C1A B8                   cp      a, b
+368   1C1B 38 01                jr      c, move_right_2
+369   1C1D
+370   1C1D AF                   xor     a
+371   1C1E
+372   1C1E              move_right_2:
+373   1C1E ED 5B 59 1A          ld      de, (RIGHT_IMAGE_ADDRESS)
+374   1C22 CD C7 1E             call    DecompressGameScreen
+375   1C25
+376   1C25 CD 95 1D             call    DrawCarousselStart
+377   1C28
+378   1C28 CD F4 1D             call    DrawRightImage
+379   1C2B CD 99 1D             call    DrawCenterImage
+380   1C2E CD B0 1D             call    DrawLeftImage
+381   1C31
+382   1C31 CD 34 1E             call    DrawCarousselEnd
+383   1C34
+384   1C34 C3 09 1B             jp      WaitForKey
+385   1C37
+386   1C37              move_left:
+387   1C37 ED 4B 59 1A          ld      bc, (RIGHT_IMAGE_ADDRESS)
+388   1C3B 2A 57 1A             ld      hl, (CENTER_IMAGE_ADDRESS)
+389   1C3E 22 59 1A             ld      (RIGHT_IMAGE_ADDRESS), hl
+390   1C41 2A 55 1A             ld      hl, (LEFT_IMAGE_ADDRESS)
+391   1C44 22 57 1A             ld      (CENTER_IMAGE_ADDRESS), hl
+392   1C47 ED 43 55 1A          ld      (LEFT_IMAGE_ADDRESS), bc
+393   1C4B
+394   1C4B 3A 52 1A             ld      a, (IMAGE_COUNT)
+395   1C4E 47                   ld      b, a
+396   1C4F 3A 51 1A             ld      a, (IMAGE_INDEX)
+397   1C52 B7                   or      a
+398   1C53 20 01                jr      nz, move_left_1
+399   1C55
+400   1C55 78                   ld      a, b
+401   1C56
+402   1C56              move_left_1:
+403   1C56 3D                   dec     a
+404   1C57 32 51 1A             ld      (IMAGE_INDEX), a
+405   1C5A
+406   1C5A 3D                   dec     a
+407   1C5B F2 60 1C             jp      p, move_left_2
+408   1C5E
+409   1C5E 78                   ld      a, b
+410   1C5F 3D                   dec     a
+411   1C60
+412   1C60              move_left_2:
+413   1C60 ED 5B 55 1A          ld      de, (LEFT_IMAGE_ADDRESS)
+414   1C64 CD C7 1E             call    DecompressGameScreen
+415   1C67
+416   1C67 CD 95 1D             call    DrawCarousselStart
+417   1C6A
+418   1C6A CD B0 1D             call    DrawLeftImage
+419   1C6D CD 99 1D             call    DrawCenterImage
+420   1C70 CD F4 1D             call    DrawRightImage
+421   1C73
+422   1C73 CD 34 1E             call    DrawCarousselEnd
+423   1C76
+424   1C76 C3 09 1B             jp      WaitForKey
+425   1C79
+426   1C79              LoadCollectionResources:
+427   1C79 CD 17 1D             call    DrawLoadingText                 ; display 'Loading...' text
+428   1C7C
+429   1C7C 2A 4F 1A             ld      hl, (CURRENT_COLLECTION)        ; hl = resource file nanme
+430   1C7F 11 0A 00             ld      de, GamesCollection.File
+431   1C82 19                   add     hl, de
+432   1C83 11 5B 1A             ld      de, FILE_NAME_BUFFER            ; Copy file name to the buffer
+433   1C86 CD F8 2D             call    CopyFileName
+434   1C89
+435   1C89 21 0B 1F             ld      hl, BIN_FILE_EXTENSION          ; Append extension
+436   1C8C 11 5B 1A             ld      de, FILE_NAME_BUFFER
+437   1C8F CD 0C 2E             call    AppendFileNameExtension
+438   1C92
+439   1C92 21 2F 32             ld      hl, RESOURCE_LOAD_ADDRESS       ; HL = resource destination address
+440   1C95 11 5B 1A             ld      de, FILE_NAME_BUFFER
+441   1C98 CD 24 2E             call    LoadBinaryFile
+442   1C9B
+443   1C9B B7                   or      a                               ; exit if error occured
+444   1C9C C2 3B 1B             jp      nz, ReturnToBasic
+445   1C9F
+446   1C9F                      ; updata music data pointer
+447   1C9F 01 2F 32             ld      bc, RESOURCE_LOAD_ADDRESS
+448   1CA2 09                   add     hl, bc
+449   1CA3 22 68 1A             ld      (MUSIC_DATA_POINTER), hl
+450   1CA6
+451   1CA6 3A 2F 32             ld      a, (GAMES_INFO_COUNT)           ; store image count
+452   1CA9 32 52 1A             ld      (IMAGE_COUNT), a
+453   1CAC
+454   1CAC                      ; update current collection information
+455   1CAC DD 2A 4F 1A          ld      ix, (CURRENT_COLLECTION)
+456   1CB0
+457   1CB0 DD 7E 00             ld      a, (ix+GamesInfo.Image)         ; restore last used image index
+458   1CB3 32 51 1A             ld      (IMAGE_INDEX), a
+459   1CB6
+460   1CB6 DD 7E 08             ld      a, (ix+GamesCollection.YearDec)
+461   1CB9 32 53 1A             ld      (YEAR_DEC), a
+462   1CBC
+463   1CBC DD 7E 09             ld      a, (ix+GamesCollection.YearDec+1)
+464   1CBF 32 54 1A             ld      (YEAR_DEC+1), a
+465   1CC2
+466   1CC2                      ; load music (if sound card is installed)
+467   1CC2 3A 9F 2E             ld      a, (SndCardType)                ; check sound card type
+468   1CC5 FE 00                cp      a, SndCardNone
+469   1CC7 C8                   ret     z
+470   1CC8
+471   1CC8 2A 4F 1A             ld      hl, (CURRENT_COLLECTION)        ; hl = resource file nanme
+472   1CCB 11 0A 00             ld      de, GamesCollection.File
+473   1CCE 19                   add     hl, de
+474   1CCF 11 5B 1A             ld      de, FILE_NAME_BUFFER            ; Copy file name to the buffer
+475   1CD2 CD F8 2D             call    CopyFileName
+476   1CD5
+477   1CD5 21 10 1F             ld      hl, MUS_FILE_EXTENSION          ; Append extension
+478   1CD8 11 5B 1A             ld      de, FILE_NAME_BUFFER
+479   1CDB CD 0C 2E             call    AppendFileNameExtension
+480   1CDE
+481   1CDE 2A 68 1A             ld      hl, (MUSIC_DATA_POINTER)        ; HL = resource destination address
+482   1CE1 11 5B 1A             ld      de, FILE_NAME_BUFFER
+483   1CE4 CD 24 2E             call    LoadBinaryFile
+484   1CE7
+485   1CE7 B7                   or      a                               ; exit if error occured
+486   1CE8 C2 3B 1B             jp      nz, ReturnToBasic
+487   1CEB
+488   1CEB C9                   ret
+489   1CEC
+490   1CEC              DrawMenu:
+491   1CEC CD 36 2D             call    SetPaging_U0_U1_VID_SYS        ; page in video memory
+492   1CEF
+493   1CEF                      ; set selected colors
+494   1CEF 3E 0F                ld      a, 15
+495   1CF1 CD 42 29             call    SetCharacterBackgroundColor
+496   1CF4
+497   1CF4 3E 03                ld      a, 3
+498   1CF6 CD 57 29             call    SetCharColor
+499   1CF9
+500   1CF9                      ; year text addess
+501   1CF9 2A 4F 1A             ld      hl, (CURRENT_COLLECTION)
+502   1CFC 01 01 00             ld      bc, GamesCollection.Year
+503   1CFF 09                   add     hl, bc
+504   1D00
+505   1D00 11 1F 1F             ld      de, YEAR_BUFFER+2              ; copy year to the buffer
+506   1D03 01 04 00             ld      bc, 4
+507   1D06 ED B0                ldir
+508   1D08
+509   1D08                      ; draw year
+510   1D08 21 1D 1F             ld      hl, YEAR_BUFFER
+511   1D0B 01 30 18             ld      bc, $1830
+512   1D0E 16 08                ld      d, YEAR_BUFFER_LENGTH
+513   1D10 CD B6 2A             call    DrawStr
+514   1D13
+515   1D13 CD 3B 2D             call    SetPaging_U0_U1_U2_SYS         ; restore paging
+516   1D16
+517   1D16 C9                   ret
+518   1D17
+519   1D17              DrawLoadingText:
+520   1D17 CD 36 2D             call    SetPaging_U0_U1_VID_SYS        ; page in video memory
+521   1D1A
+522   1D1A                      ; set selected colors
+523   1D1A 3E 0F                ld      a, 15
+524   1D1C CD 42 29             call    SetCharacterBackgroundColor
+525   1D1F
+526   1D1F 3E 03                ld      a, 3
+527   1D21 CD 57 29             call    SetCharColor
+528   1D24
+529   1D24                      ; draw loading text
+530   1D24 21 15 1F             ld      hl, LOADING_TEXT
+531   1D27 01 30 18             ld      bc, $1830
+532   1D2A 16 08                ld      d, LOADING_TEXT_LENGTH
+533   1D2C CD B6 2A             call    DrawStr
+534   1D2F
+535   1D2F CD 3B 2D             call    SetPaging_U0_U1_U2_SYS         ; restore paging
+536   1D32
+537   1D32 C9                   ret
+538   1D33
+539   1D33                      ;---------------------------------------------------------------------
+540   1D33                      ; Saves current selected image index into the collection data
+541   1D33                      ; Input: -
+542   1D33                      ; Output: -
+543   1D33              SaveSelectionCollectionPos:
+544   1D33 DD 2A 4F 1A          ld      ix, (CURRENT_COLLECTION)
+545   1D37 3A 51 1A             ld      a, (IMAGE_INDEX)                ; save pos
+546   1D3A DD 77 00             ld      (ix+GamesCollection.Index), a
+547   1D3D
+548   1D3D C9                   ret
+549   1D3E
+550   1D3E                      ;---------------------------------------------------------------------
+551   1D3E                      ; Initializes image carousel
+552   1D3E                      ; Input: -
+553   1D3E                      ; Output: -
+554   1D3E              InitCarousel:
+555   1D3E                      ; init image carousell
+556   1D3E 21 00 C0             ld      hl, IMAGE_BUFFER0               ; reset buffers
+557   1D41 22 55 1A             ld      (LEFT_IMAGE_ADDRESS), hl
+558   1D44
+559   1D44 21 00 D0             ld      hl, IMAGE_BUFFER1
+560   1D47 22 57 1A             ld      (CENTER_IMAGE_ADDRESS), hl
+561   1D4A
+562   1D4A 21 00 E0             ld      hl, IMAGE_BUFFER2
+563   1D4D 22 59 1A             ld      (RIGHT_IMAGE_ADDRESS), hl
+564   1D50
+565   1D50                      ; ** load screens
+566   1D50
+567   1D50                      ; left screen
+568   1D50 3A 52 1A             ld      a, (IMAGE_COUNT)
+569   1D53 47                   ld      b, a
+570   1D54 3A 51 1A             ld      a, (IMAGE_INDEX)
+571   1D57 3D                   dec     a
+572   1D58 B8                   cp      a, b                            ; check for index underrun
+573   1D59 38 02                jr      c, ICLeftImageIndexOk
+574   1D5B
+575   1D5B 78                   ld      a, b                            ; load image count - 1
+576   1D5C 3D                   dec     a
+577   1D5D
+578   1D5D              ICLeftImageIndexOk:
+579   1D5D ED 5B 55 1A          ld      de, (LEFT_IMAGE_ADDRESS)
+580   1D61 CD C7 1E             call    DecompressGameScreen
+581   1D64
+582   1D64                      ; center screen
+583   1D64 3A 51 1A             ld      a, (IMAGE_INDEX)
+584   1D67 ED 5B 57 1A          ld      de, (CENTER_IMAGE_ADDRESS)
+585   1D6B CD C7 1E             call    DecompressGameScreen
+586   1D6E
+587   1D6E                      ; right screen
+588   1D6E 3A 52 1A             ld      a, (IMAGE_COUNT)
+589   1D71 47                   ld      b, a
+590   1D72 3A 51 1A             ld      a, (IMAGE_INDEX)
+591   1D75 3C                   inc     a
+592   1D76 B8                   cp      a, b
+593   1D77 38 01                jr      c, ICRightIndexOk
+594   1D79
+595   1D79 AF                   xor     a, a                            ; load first image
+596   1D7A
+597   1D7A              ICRightIndexOk:
+598   1D7A ED 5B 59 1A          ld      de, (RIGHT_IMAGE_ADDRESS)
+599   1D7E CD C7 1E             call    DecompressGameScreen
+600   1D81
+601   1D81 CD 85 1D             call    DrawCarousel
+602   1D84
+603   1D84 C9                   ret
+604   1D85
+605   1D85                      ;---------------------------------------------------------------------
+606   1D85                      ; Draws image carusel
+607   1D85                      ; Input: -
+608   1D85                      ; Output: -
+609   1D85              DrawCarousel:
+610   1D85 CD 95 1D             call    DrawCarousselStart
+611   1D88
+612   1D88 CD 99 1D             call    DrawCenterImage
+613   1D8B CD B0 1D             call    DrawLeftImage
+614   1D8E CD F4 1D             call    DrawRightImage
+615   1D91
+616   1D91 CD 34 1E             call    DrawCarousselEnd
+617   1D94
+618   1D94 C9                   ret
+619   1D95
+620   1D95              DrawCarousselStart:
+621   1D95 CD 45 2D             call    SetPaging_U0_U1_VID_U3         ; set paging
+622   1D98 C9                   ret
+623   1D99
+624   1D99              DrawCenterImage:
+625   1D99                      ; draw center screen
+626   1D99 3E 78                ld      a, GAME_IMAGE_HEIGHT
+627   1D9B 11 10 96             ld      de, CENTER_IMAGE_COORDINATES
+628   1D9E 2A 57 1A             ld      hl, (CENTER_IMAGE_ADDRESS)
+629   1DA1
+630   1DA1              next_line:
+631   1DA1 01 20 00             ld      bc, GAME_IMAGE_WIDTH
+632   1DA4 ED B0                ldir
+633   1DA6
+634   1DA6 EB                   ex      hl, de
+635   1DA7 01 20 00             ld      bc, SCREEN_WIDTH - GAME_IMAGE_WIDTH
+636   1DAA 09                   add     hl, bc
+637   1DAB EB                   ex      hl, de
+638   1DAC
+639   1DAC 3D                   dec     a
+640   1DAD 20 F2                jr      nz, next_line
+641   1DAF
+642   1DAF C9                   ret
+643   1DB0
+644   1DB0              DrawLeftImage:
+645   1DB0                      ; draw left screen
+646   1DB0 11 00 96             ld      de, LEFT_IMAGE_COORDINATES
+647   1DB3 2A 55 1A             ld      hl, (LEFT_IMAGE_ADDRESS)
+648   1DB6 01 12 00             ld      bc, LEFT_IMAGE_OFFSET
+649   1DB9 09                   add     hl, bc
+650   1DBA
+651   1DBA DD 26 BF             ld      xh, $bf
+652   1DBD DD 2E 15             ld      xl, $15
+653   1DC0
+654   1DC0 0E 78                ld      c, GAME_IMAGE_HEIGHT
+655   1DC2
+656   1DC2              start_copy_left_image_line:
+657   1DC2 06 0E                ld      b, GAME_IMAGE_WIDTH - LEFT_IMAGE_OFFSET
+658   1DC4
+659   1DC4              copy_left_image_line:
+660   1DC4 7E                   ld      a, (hl)
+661   1DC5 DD A4                and     xh
+662   1DC7 DD B5                or      xl
+663   1DC9 12                   ld      (de), a
+664   1DCA 23                   inc     hl
+665   1DCB 13                   inc     de
+666   1DCC 10 F6                djnz    copy_left_image_line
+667   1DCE
+668   1DCE 0D                   dec     c
+669   1DCF 28 22                jr      z, left_image_finished
+670   1DD1
+671   1DD1 79                   ld      a, c                            ; save line counter
+672   1DD2 01 12 00             ld      bc, LEFT_IMAGE_OFFSET
+673   1DD5 09                   add     hl, bc
+674   1DD6 EB                   ex      hl, de
+675   1DD7 01 32 00             ld      bc, SCREEN_WIDTH - (GAME_IMAGE_WIDTH - LEFT_IMAGE_OFFSET)
+676   1DDA 09                   add     hl ,  bc
+677   1DDB EB                   ex      hl, de
+678   1DDC 4F                   ld      c, a                            ; restore line counter
+679   1DDD
+680   1DDD DD 7D                ld      a ,  xl
+681   1DDF FE 15                cp      a, $15
+682   1DE1 20 08                jr      nz, left_next_mask
+683   1DE3
+684   1DE3 DD 26 7F             ld      xh, $7f
+685   1DE6 DD 2E 2A             ld      xl, $2A
+686   1DE9
+687   1DE9 18 D7                jr      start_copy_left_image_line
+688   1DEB
+689   1DEB              left_next_mask:
+690   1DEB DD 26 BF             ld      xh, $bf
+691   1DEE DD 2E 15             ld      xl, $15
+692   1DF1
+693   1DF1 18 CF                jr      start_copy_left_image_line
+694   1DF3
+695   1DF3              left_image_finished:
+696   1DF3 C9                   ret
+697   1DF4
+698   1DF4              DrawRightImage:
+699   1DF4                      ; draw right screen
+700   1DF4 11 32 96             ld      de, RIGHT_IMAGE_COORDINATES
+701   1DF7 2A 59 1A             ld      hl, (RIGHT_IMAGE_ADDRESS)
+702   1DFA
+703   1DFA DD 26 7F             ld      xh, $7f
+704   1DFD DD 2E 2A             ld      xl, $2A
+705   1E00
+706   1E00 0E 78                ld      c, GAME_IMAGE_HEIGHT
+707   1E02
+708   1E02              start_copy_right_image_line:
+709   1E02 06 0E                ld      b, RIGHT_IMAGE_WIDTH
+710   1E04
+711   1E04              copy_right_image_line:
+712   1E04 7E                   ld      a, (hl)
+713   1E05 DD A4                and     xh
+714   1E07 DD B5                or      xl
+715   1E09 12                   ld      (de), a
+716   1E0A 23                   inc     hl
+717   1E0B 13                   inc     de
+718   1E0C 10 F6                djnz    copy_right_image_line
+719   1E0E
+720   1E0E 0D                   dec     c
+721   1E0F 28 22                jr      z, right_image_finished
+722   1E11
+723   1E11 79                   ld      a, c                            ; save line counter
+724   1E12 01 12 00             ld      bc, GAME_IMAGE_WIDTH - RIGHT_IMAGE_WIDTH
+725   1E15 09                   add     hl, bc
+726   1E16 EB                   ex      hl, de
+727   1E17 01 32 00             ld      bc, SCREEN_WIDTH - RIGHT_IMAGE_WIDTH
+728   1E1A 09                   add     hl ,  bc
+729   1E1B EB                   ex      hl, de
+730   1E1C 4F                   ld      c, a                            ; restore line counter
+731   1E1D
+732   1E1D DD 7D                ld      a,  xl
+733   1E1F FE 15                cp      a, $15
+734   1E21 20 08                jr      nz, right_next_mask
+735   1E23
+736   1E23 DD 26 7F             ld      xh, $7f
+737   1E26 DD 2E 2A             ld      xl, $2A
+738   1E29
+739   1E29 18 D7                jr      start_copy_right_image_line
+740   1E2B
+741   1E2B              right_next_mask:
+742   1E2B DD 26 BF             ld      xh, $bf
+743   1E2E DD 2E 15             ld      xl, $15
+744   1E31
+745   1E31 18 CF                jr      start_copy_right_image_line
+746   1E33
+747   1E33              right_image_finished:
+748   1E33 C9                   ret
+749   1E34
+750   1E34              DrawCarousselEnd:
+751   1E34 3E 05                ld      a, 5
+752   1E36 CD 57 29             call    SetCharColor
+753   1E39
+754   1E39 3E 00                ld      a, 0
+755   1E3B CD 42 29             call    SetCharacterBackgroundColor
+756   1E3E
+757   1E3E 3A 51 1A             ld      a, (IMAGE_INDEX)
+758   1E41 6F                   ld      l, a
+759   1E42 3A 54 1A             ld      a, (YEAR_DEC+1)
+760   1E45 67                   ld      h, a
+761   1E46 3A 53 1A             ld      a, (YEAR_DEC)
+762   1E49 85                   add     a, l
+763   1E4A 6F                   ld      l, a
+764   1E4B 3E 00                ld      a, 0
+765   1E4D 01 E2 10             ld      bc, $10e2
+766   1E50 CD E6 2A             call    DrawNumber
+767   1E53 21 EC 1E             ld      hl, RESULTS_END_STRING
+768   1E56 16 01                ld      d, 1
+769   1E58 CD B6 2A             call    DrawStr
+770   1E5B
+771   1E5B 3A 52 1A             ld      a, (IMAGE_COUNT)
+772   1E5E 47                   ld      b, a
+773   1E5F 3A 51 1A             ld      a, (IMAGE_INDEX)
+774   1E62 3C                   inc     a
+775   1E63 B8                   cp      a, b
+776   1E64 38 01                jr      c, index_ok
+777   1E66
+778   1E66 AF                   xor     a
+779   1E67
+780   1E67              index_ok:
+781   1E67                      ; draw place number
+782   1E67 6F                   ld      l, a
+783   1E68 3A 54 1A             ld      a, (YEAR_DEC+1)
+784   1E6B 67                   ld      h, a
+785   1E6C 3A 53 1A             ld      a, (YEAR_DEC)
+786   1E6F 85                   add     a, l
+787   1E70 6F                   ld      l, a
+788   1E71 3E 00                ld      a, 0
+789   1E73 01 E2 34             ld      bc, $34e2
+790   1E76 CD E6 2A             call    DrawNumber
+791   1E79 21 EC 1E             ld      hl, RESULTS_END_STRING
+792   1E7C 16 FF                ld      d, 255
+793   1E7E CD B6 2A             call    DrawStr
+794   1E81
+795   1E81                      ; draw game title
+796   1E81 3A 51 1A             ld      a, (IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
+797   1E84 6F                   ld      l, a
+798   1E85 26 00                ld      h, 0
+799   1E87 29                   add     hl, hl
+800   1E88 29                   add     hl, hl
+801   1E89 29                   add     hl, hl
+802   1E8A 29                   add     hl, hl
+803   1E8B
+804   1E8B 4D                   ld      c, l
+805   1E8C 44                   ld      b, h
+806   1E8D
+807   1E8D 29                   add     hl, hl
+808   1E8E 09                   add     hl, bc
+809   1E8F
+810   1E8F 3A 51 1A             ld      a, (IMAGE_INDEX)
+811   1E92 4F                   ld      c, a
+812   1E93 06 00                ld      b, 0
+813   1E95 09                   add     hl, bc
+814   1E96 09                   add     hl, bc
+815   1E97
+816   1E97 01 02 00             ld      bc, GamesInfo.Title
+817   1E9A 09                   add     hl, bc
+818   1E9B 01 30 32             ld      bc, GAMES_INFO
+819   1E9E 09                   add     hl, bc
+820   1E9F
+821   1E9F 01 41 01             ld      bc, $0141
+822   1EA2 16 20                ld      d, 32
+823   1EA4 CD B6 2A             call    DrawStr
+824   1EA7
+825   1EA7 CD 3B 2D             call    SetPaging_U0_U1_U2_SYS         ; restore paging
+826   1EAA
+827   1EAA C9                   ret
+828   1EAB
+829   1EAB
+830   1EAB                      ;---------------------------------------------------------------------
+831   1EAB                      ; Gets the current GamesInfo struct address
+832   1EAB                      ; Input:  DE - offset within the struct
+833   1EAB                      ; Output: HL - address of the struct's member
+834   1EAB              GetCurrentGamesInfoAddress:
+835   1EAB 3A 51 1A             ld      a, (IMAGE_INDEX)                 ; HL = COLLECTION + IMAGE_INDEX * sizeof(GamesInfo)
+836   1EAE 6F                   ld      l, a
+837   1EAF 26 00                ld      h, 0
+838   1EB1 29                   add     hl, hl
+839   1EB2 29                   add     hl, hl
+840   1EB3 29                   add     hl, hl
+841   1EB4 29                   add     hl, hl
+842   1EB5
+843   1EB5 4D                   ld      c, l
+844   1EB6 44                   ld      b, h
+845   1EB7
+846   1EB7 29                   add     hl, hl
+847   1EB8 09                   add     hl, bc
+848   1EB9
+849   1EB9 3A 51 1A             ld      a, (IMAGE_INDEX)
+850   1EBC 4F                   ld      c, a
+851   1EBD 06 00                ld      b, 0
+852   1EBF 09                   add     hl, bc
+853   1EC0 09                   add     hl, bc
+854   1EC1
+855   1EC1 19                   add     hl, de
+856   1EC2 01 30 32             ld      bc, GAMES_INFO
+857   1EC5 09                   add     hl, bc
+858   1EC6
+859   1EC6 C9                   ret
+860   1EC7
+861   1EC7                      ;---------------------------------------------------------------------
+862   1EC7                      ; Decompresses game screen into the given buffer
+863   1EC7                      ; Input:  A - Game screen index
+864   1EC7                      ;         DE - target buffer
+865   1EC7              DecompressGameScreen:
+866   1EC7 01 32 00             ld      bc, GamesInfo
+867   1ECA 21 30 32             ld      hl, GAMES_INFO
+868   1ECD B7                   or      a
+869   1ECE 28 04                jr      z, LDecompressNoMultiply
+870   1ED0
+871   1ED0              LDecompressMultiply:
+872   1ED0 09                   add     hl, bc
+873   1ED1 3D                   dec     a
+874   1ED2 20 FC                jr      nz, LDecompressMultiply
+875   1ED4
+876   1ED4              LDecompressNoMultiply:
+877   1ED4 7E                   ld      a, (hl)
+878   1ED5 23                   inc     hl
+879   1ED6 66                   ld      h, (hl)
+880   1ED7 6F                   ld      l, a
+881   1ED8 01 2D 32             ld      bc, GAMES_INFO - 3              ; skip resource file header (file length 2 bytes,game count 1 bytes)
+882   1EDB 09                   add     hl, bc
+883   1EDC 23                   inc     hl                              ; skip image size
+884   1EDD 23                   inc     hl
+885   1EDE
+886   1EDE CD 40 2D             call    SetPaging_U0_U1_U2_U3
+887   1EE1
+888   1EE1 CD 9E 2D             call    dzx7_turbo
+889   1EE4
+890   1EE4 CD 3B 2D             call    SetPaging_U0_U1_U2_SYS
+891   1EE7
+892   1EE7 C9                   ret
+893   1EE8
+894   1EE8              HIDE_PALETTE:
+895   1EE8 00 00 44 41          db      0, 0, 68, 65
+896   1EEC
+897   1EEC              RESULTS_END_STRING:
+898   1EEC 40 00                db      "@", 0
+899   1EEE
+900   1EEE                      if      LOADERTYPE == 1
+901   1EEE              CARTRIDGE_STRING:
+902   1EEE 4D 45 47 41          db      "MEGACART", 0
+902   1EF2 43 41 52 54
+902   1EF6 00
+903   1EF7                      endif
+904   1EF7
+905   1EF7                      if      LOADERTYPE == 2
+906   1EF7 ~            CARTRIDGE_STRING:
+907   1EF7 ~                    db      "MULTICART", 0
+908   1EF7                      endif
+909   1EF7
+910   1EF7                      if      LOADERTYPE == 3
+911   1EF7 ~            CARTRIDGE_STRING:
+912   1EF7 ~                    db      "LOADER", 0
+913   1EF7                      endif
+914   1EF7
+915   1EF7              TVC_GAMES_STRING:
+916   1EF7 54 56 43 20          db      "TVC GAMES", 0
+916   1EFB 47 41 4D 45
+916   1EFF 53 00
+917   1F01
+918   1F01              DATES_STRING:
+919   1F01                      if      LOADERTYPE != LOADER_FILE
+920   1F01 32 30 31 39          db      "2019-2022", 0
+920   1F05 2D 32 30 32
+920   1F09 32 00
+921   1F0B                      else
+922   1F0B ~                    db      "2021-2022", 0
+923   1F0B                      endif
+924   1F0B
+925   1F0B              BIN_FILE_EXTENSION:
+926   1F0B 2E 42 49 4E          db      ".BIN", 0
+926   1F0F 00
+927   1F10
+928   1F10              MUS_FILE_EXTENSION:
+929   1F10 2E 4D 55 53          db      ".MUS", 0
+929   1F14 00
+930   1F15
+931   1F15              LOADING_TEXT:
+932   1F15 20 4C 4F 41          db      " LOADING"
+932   1F19 44 49 4E 47
+933   1F1D              LOADING_TEXT_LENGTH     equ $-LOADING_TEXT
+934   1F1D
+935   1F1D              YEAR_BUFFER:
+936   1F1D 20 20 2E 2E          db      "  ....  "
+936   1F21 2E 2E 20 20
+937   1F25              YEAR_BUFFER_LENGTH     equ $-YEAR_BUFFER
+938   1F25
+939   1F25              FILENAME_VARIABLE:
+940   1F25 4E 24                db      "N$"
+941   1F27
+942   1F27                      include "interrupt.a80"
+# file opened: interrupt.a80
+  1+  1F27                      ;---------------------------------------------------------------------
+  2+  1F27                      ; Initialize custom interrupt handler
+  3+  1F27              InitInterrupt:
+  4+  1F27 F3                   di
+  5+  1F28
+  6+  1F28 2A 3E 00             ld      hl, (IT_VECTOR_ADDR)            ; save original IT vector
+  7+  1F2B 22 54 1F             ld      (ItVectorSave+1), hl
+  8+  1F2E
+  9+  1F2E 21 3F 1F             ld      hl, InterruptEntry         ; redirect interrupt to music player routine
+ 10+  1F31 22 3E 00             ld      (IT_VECTOR_ADDR), hl
+ 11+  1F34
+ 12+  1F34 FB                   ei
+ 13+  1F35
+ 14+  1F35 C9                   ret
+ 15+  1F36
+ 16+  1F36                      ;---------------------------------------------------------------------
+ 17+  1F36                      ; Deinitialize custom interrupt handler
+ 18+  1F36              RestoreInterrupt:
+ 19+  1F36 F3                   di
+ 20+  1F37
+ 21+  1F37 2A 54 1F             ld      hl, (ItVectorSave+1)         ; restore IT vector address
+ 22+  1F3A 22 3E 00             ld      (IT_VECTOR_ADDR), hl
+ 23+  1F3D
+ 24+  1F3D FB                   ei
+ 25+  1F3E
+ 26+  1F3E C9                   ret
+ 27+  1F3F
+ 28+  1F3F                      ;---------------------------------------------------------------------
+ 29+  1F3F                      ; Custom interrupt handler
+ 30+  1F3F              InterruptEntry:
+ 31+  1F3F C5                   push	bc
+ 32+  1F40 D5                   push	de
+ 33+  1F41 E5                   push	hl
+ 34+  1F42 DD E5                push	ix
+ 35+  1F44 FD E5                push	iy
+ 36+  1F46
+ 37+  1F46 CD 77 2F             call	MusicPlayer_IT
+ 38+  1F49 CD 80 1F             call    TextScroll
+ 39+  1F4C
+ 40+  1F4C FD E1                pop	iy
+ 41+  1F4E DD E1                pop	ix
+ 42+  1F50 E1                   pop	hl
+ 43+  1F51 D1                   pop	de
+ 44+  1F52 C1                   pop	bc
+ 45+  1F53
+ 46+  1F53              ItVectorSave:
+ 47+  1F53 C3 00 00             jp      0
+ 48+  1F56
+# file closed: interrupt.a80
+943   1F56                      include "textscroll.a80"
+# file opened: textscroll.a80
+  1+  1F56
+  2+  1F56 00           SCROLL_TEXT_DELAY       db      0               ; Delay (number of VSYNC) for the scroll
+  3+  1F57 00           SCROLL_PHASE            db      0               ; Scroll phase (pixel index in the 4 pixel wide character)
+  4+  1F58 00 00        SCROLL_CHARACTER        dw      0               ; Current character address in the scroll text (rightmost character on the screen)
+  5+  1F5A 00           SCROLL_CHAR_COLOR       db      0               ; Saved character color
+  6+  1F5B 00           SCROLL_BACKGROUND_COLOR db      0               ; Saved background color
+  7+  1F5C
+  8+  1F5C              InitTextScroll:
+  9+  1F5C                      ; init scroll text
+ 10+  1F5C CD 36 2D             call    SetPaging_U0_U1_VID_SYS        ; page in video memory
+ 11+  1F5F
+ 12+  1F5F 3E 07                ld      a, 7                            ; set character color
+ 13+  1F61 CD 57 29             call    SetCharColor
+ 14+  1F64
+ 15+  1F64 3E 0F                ld      a, 15                           ; set background color
+ 16+  1F66 CD 42 29             call    SetCharacterBackgroundColor
+ 17+  1F69
+ 18+  1F69 01 F0 00             ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
+ 19+  1F6C 3E 20                ld      a, ' '                          ; Start scrolling with a space
+ 20+  1F6E CD 85 29             call    PutChar
+ 21+  1F71
+ 22+  1F71 CD 3B 2D             call    SetPaging_U0_U1_U2_SYS         ; restore paging
+ 23+  1F74
+ 24+  1F74 3E 00                ld      a, 0                            ; init scroll variables
+ 25+  1F76 32 57 1F             ld      (SCROLL_PHASE), a
+ 26+  1F79 21 32 20             ld      hl, SCROLL_TEXT
+ 27+  1F7C 22 58 1F             ld      (SCROLL_CHARACTER), hl
+ 28+  1F7F
+ 29+  1F7F C9                   ret
+ 30+  1F80
+ 31+  1F80              TextScroll:
+ 32+  1F80                      ; check delay
+ 33+  1F80 3A 56 1F             ld      a, (SCROLL_TEXT_DELAY)          ; Handle scroll delay
+ 34+  1F83 3C                   inc     a                               ; increment delay counter
+ 35+  1F84 32 56 1F             ld      (SCROLL_TEXT_DELAY), a
+ 36+  1F87 FE 02                cp      a, SCROLL_DELAY
+ 37+  1F89 D8                   ret     c
+ 38+  1F8A
+ 39+  1F8A                      ; scroll text
+ 40+  1F8A AF                   xor     a                               ; reset delay counter
+ 41+  1F8B 32 56 1F             ld      (SCROLL_TEXT_DELAY), a
+ 42+  1F8E
+ 43+  1F8E                      ; save current text colors
+ 44+  1F8E 3A 40 29             ld      a, (CharColorSave)
+ 45+  1F91 32 5A 1F             ld      (SCROLL_CHAR_COLOR),  a
+ 46+  1F94
+ 47+  1F94 3A 41 29             ld      a,(CharBackgroundSave)
+ 48+  1F97 32 5B 1F             ld      (SCROLL_BACKGROUND_COLOR), a
+ 49+  1F9A
+ 50+  1F9A 3E 50                ld	a, P_U0_U1_VID_SYS              ; Page in video memory to page 2.: U0, U1, VID, SYS
+ 51+  1F9C D3 02        	out	(PAGE_REG), a
+ 52+  1F9E
+ 53+  1F9E 3A 57 1F             ld      a, (SCROLL_PHASE)               ; update scroll phase (scroll position within character)
+ 54+  1FA1 3C                   inc     a
+ 55+  1FA2 E6 03                and     $03                             ; valid phase values are 0-3
+ 56+  1FA4 32 57 1F             ld      (SCROLL_PHASE), a
+ 57+  1FA7
+ 58+  1FA7 B7                   or      a
+ 59+  1FA8 20 20                jr      nz, LeftScrollPhaseNonzero
+ 60+  1FAA
+ 61+  1FAA                      ; at zero phase draw character
+ 62+  1FAA
+ 63+  1FAA 3E 07                ld      a, 7                            ; set character color
+ 64+  1FAC CD 57 29             call    SetCharColor
+ 65+  1FAF
+ 66+  1FAF 3E 0F                ld      a, 15                           ; set background color
+ 67+  1FB1 CD 42 29             call    SetCharacterBackgroundColor
+ 68+  1FB4
+ 69+  1FB4 2A 58 1F             ld      hl, (SCROLL_CHARACTER)          ; get character pos
+ 70+  1FB7 7E                   ld      a, (hl)
+ 71+  1FB8 23                   inc     hl
+ 72+  1FB9 B7                   or      a                               ; end of string?
+ 73+  1FBA 20 05                jr      nz, LeftScrollNoStringEnd
+ 74+  1FBC
+ 75+  1FBC 21 32 20             ld      hl, SCROLL_TEXT                 ; restart from the first character
+ 76+  1FBF 7E                   ld      a, (hl)
+ 77+  1FC0 23                   inc     hl
+ 78+  1FC1
+ 79+  1FC1              LeftScrollNoStringEnd:
+ 80+  1FC1 22 58 1F             ld      (SCROLL_CHARACTER), hl          ; store character address
+ 81+  1FC4
+ 82+  1FC4 01 F0 00             ld      bc, 240                         ; draw to nonvisible area X=0, Y=240
+ 83+  1FC7 CD 85 29             call    PutChar                         ; a register already contains the character
+ 84+  1FCA
+ 85+  1FCA              LeftScrollPhaseNonzero:
+ 86+  1FCA DD 21 00 BC          ld      ix, VIDEOMEM + SCREEN_WIDTH * 240
+ 87+  1FCE
+ 88+  1FCE                      ; scroll area to left by one pixel
+ 89+  1FCE 21 BF BA             ld      hl, VIDEOMEM + SCREEN_WIDTH * 235 - 1
+ 90+  1FD1 0E 05                ld      c, 5                            ; scroll are height = 5
+ 91+  1FD3
+ 92+  1FD3              LeftScrollLine:
+ 93+  1FD3                      ; get incoming pixel data
+ 94+  1FD3 3A 57 1F             ld      a, (SCROLL_PHASE)
+ 95+  1FD6
+ 96+  1FD6 FE 00                cp      a, 0
+ 97+  1FD8 20 0A                jr      nz, ScrollPhase1
+ 98+  1FDA
+ 99+  1FDA DD 7E 00             ld      a, (ix)                         ; load pixel data
+100+  1FDD E6 AA                and     a, $aa                          ; keep right pixel
+101+  1FDF CB 3F                srl     a                               ; left pixel -> right pixel
+102+  1FE1 57                   ld      d, a
+103+  1FE2 18 20                jr      LeftScrollLinePixels
+104+  1FE4
+105+  1FE4              ScrollPhase1:
+106+  1FE4 FE 01                cp      a, 1
+107+  1FE6 20 08                jr      nz, ScrollPhase2
+108+  1FE8
+109+  1FE8 DD 7E 00             ld      a, (ix)                         ; load pixel data
+110+  1FEB E6 55                and     a, $55                          ; keep right pixel
+111+  1FED 57                   ld      d, a
+112+  1FEE 18 14                jr      LeftScrollLinePixels
+113+  1FF0
+114+  1FF0              ScrollPhase2:
+115+  1FF0 FE 02                cp      a, 2
+116+  1FF2 20 0A                jr      nz, ScrollPhase3
+117+  1FF4
+118+  1FF4 DD 7E 01             ld      a, (ix+1)                       ; load pixel data
+119+  1FF7 E6 AA                and     a, $aa                          ; keep right pixel
+120+  1FF9 CB 3F                srl     a                               ; left pixel -> right pixel
+121+  1FFB 57                   ld      d, a
+122+  1FFC
+123+  1FFC 18 06                jr      LeftScrollLinePixels
+124+  1FFE
+125+  1FFE              ScrollPhase3:
+126+  1FFE DD 7E 01             ld      a, (ix+1)                       ; load pixel data
+127+  2001 E6 55                and     a, $55                          ; keep right pixel
+128+  2003 57                   ld      d, a
+129+  2004
+130+  2004              LeftScrollLinePixels:
+131+  2004 06 40                ld      b, SCREEN_WIDTH
+132+  2006
+133+  2006              LeftScrollPixel:
+134+  2006 7E                   ld      a, (hl)                         ; load pixel
+135+  2007 5F                   ld      e, a                            ; save pixel for scroll
+136+  2008 CB 27                sla     a                               ; move one pixel to the left
+137+  200A E6 AA                and     $aa                             ; keep only the first pixel
+138+  200C B2                   or      d                               ; add second pixel
+139+  200D 77                   ld      (hl), a                         ; save new pixel
+140+  200E CB 3B                srl     e                               ; left pixel -> right pixel
+141+  2010 3E 55                ld      a, $55                          ; keep only right
+142+  2012 A3                   and     a, e
+143+  2013 57                   ld      d, a                            ; save it in d register
+144+  2014 2B                   dec     hl                              ; next pixel
+145+  2015 10 EF                djnz    LeftScrollPixel
+146+  2017
+147+  2017 11 40 00             ld      de, SCREEN_WIDTH
+148+  201A 19                   add     hl, de
+149+  201B 19                   add     hl, de
+150+  201C DD 19                add     ix, de
+151+  201E 0D                   dec     c
+152+  201F 20 B2                jr      nz, LeftScrollLine
+153+  2021
+154+  2021 3E 70                ld	a, P_U0_U1_U2_SYS	        ; Set paging to U0, U1, U2, SYS
+155+  2023 D3 02        	out	(PAGE_REG), a
+156+  2025
+157+  2025                      ; restore character colors
+158+  2025 3A 5A 1F             ld      a, (SCROLL_CHAR_COLOR)
+159+  2028 CD 57 29             call    SetCharColor
+160+  202B
+161+  202B 3A 5B 1F             ld      a, (SCROLL_BACKGROUND_COLOR)
+162+  202E CD 42 29             call    SetCharacterBackgroundColor
+163+  2031
+164+  2031 C9                   ret
+165+  2032
+166+  2032              SCROLL_TEXT:
+167+  2032 4D 45 47 41          db      "MEGAPLEX CARTRIDGE "
+167+  2036 50 4C 45 58
+167+  203A 20 43 41 52
+167+  203E 54 52 49 44
+167+  2042 47 45 20
+168+  2045 43 4F 4E 54          db      "CONTAINS VIDEOTON TV COMPUTER GAME DEVELOPMENT COMPETITIONS 2019-2022   "
+168+  2049 41 49 4E 53
+168+  204D 20 56 49 44
+168+  2051 45 4F 54 4F
+168+  2055 4E 20 54 56
+168+  2059 20 43 4F 4D
+168+  205D 50 55 54 45
+168+  2061 52 20 47 41
+168+  2065 4D 45 20 44
+168+  2069 45 56 45 4C
+168+  206D 4F 50 4D 45
+168+  2071 4E 54 20 43
+168+  2075 4F 4D 50 45
+168+  2079 54 49 54 49
+168+  207D 4F 4E 53 20
+168+  2081 32 30 31 39
+168+  2085 2D 32 30 32
+168+  2089 32 20 20 20
+169+  208D 43 4F 44 45          db      "CODE:LASZLO ARVAI  GRAPHICS:MIHALY SARANSZKI  MUSIC:MATT FURNISS   "
+169+  2091 3A 4C 41 53
+169+  2095 5A 4C 4F 20
+169+  2099 41 52 56 41
+169+  209D 49 20 20 47
+169+  20A1 52 41 50 48
+169+  20A5 49 43 53 3A
+169+  20A9 4D 49 48 41
+169+  20AD 4C 59 20 53
+169+  20B1 41 52 41 4E
+169+  20B5 53 5A 4B 49
+169+  20B9 20 20 4D 55
+169+  20BD 53 49 43 3A
+169+  20C1 4D 41 54 54
+169+  20C5 20 46 55 52
+169+  20C9 4E 49 53 53
+169+  20CD 20 20 20
+170+  20D0
+171+  20D0 4A 4F 59 53  	db      "JOYSTICK UP/DOWN: SELECT YEAR     JOYSTICK LEFT/RIGHT: SELECT GAME     FIRE/RETURN: START GAME     ESC: EXIT MEGAPLEX     "
+171+  20D4 54 49 43 4B
+171+  20D8 20 55 50 2F
+171+  20DC 44 4F 57 4E
+171+  20E0 3A 20 53 45
+171+  20E4 4C 45 43 54
+171+  20E8 20 59 45 41
+171+  20EC 52 20 20 20
+171+  20F0 20 20 4A 4F
+171+  20F4 59 53 54 49
+171+  20F8 43 4B 20 4C
+171+  20FC 45 46 54 2F
+171+  2100 52 49 47 48
+171+  2104 54 3A 20 53
+171+  2108 45 4C 45 43
+171+  210C 54 20 47 41
+171+  2110 4D 45 20 20
+171+  2114 20 20 20 46
+171+  2118 49 52 45 2F
+171+  211C 52 45 54 55
+171+  2120 52 4E 3A 20
+171+  2124 53 54 41 52
+171+  2128 54 20 47 41
+171+  212C 4D 45 20 20
+171+  2130 20 20 20 45
+171+  2134 53 43 3A 20
+171+  2138 45 58 49 54
+171+  213C 20 4D 45 47
+171+  2140 41 50 4C 45
+171+  2144 58 20 20 20
+171+  2148 20 20
+172+  214A
+173+  214A 32 30 32 32  	db      "2022 GAMES: 1.SOTET KASTELY     2.FITTER     3.FRED     "
+173+  214E 20 47 41 4D
+173+  2152 45 53 3A 20
+173+  2156 31 2E 53 4F
+173+  215A 54 45 54 20
+173+  215E 4B 41 53 54
+173+  2162 45 4C 59 20
+173+  2166 20 20 20 20
+173+  216A 32 2E 46 49
+173+  216E 54 54 45 52
+173+  2172 20 20 20 20
+173+  2176 20 33 2E 46
+173+  217A 52 45 44 20
+173+  217E 20 20 20 20
+174+  2182 34 2E 4B 4F  	db      "4.KONDI KRUSH     5.ZUHANAS     6.NONOGRAM     7.VAKEMBER SZIMULATOR     "
+174+  2186 4E 44 49 20
+174+  218A 4B 52 55 53
+174+  218E 48 20 20 20
+174+  2192 20 20 35 2E
+174+  2196 5A 55 48 41
+174+  219A 4E 41 53 20
+174+  219E 20 20 20 20
+174+  21A2 36 2E 4E 4F
+174+  21A6 4E 4F 47 52
+174+  21AA 41 4D 20 20
+174+  21AE 20 20 20 37
+174+  21B2 2E 56 41 4B
+174+  21B6 45 4D 42 45
+174+  21BA 52 20 53 5A
+174+  21BE 49 4D 55 4C
+174+  21C2 41 54 4F 52
+174+  21C6 20 20 20 20
+174+  21CA 20
+175+  21CB 38 2E 56 45  	db      "8.VERDESO VOCSOK     9.BREKK     10.PIPE MASTER     "
+175+  21CF 52 44 45 53
+175+  21D3 4F 20 56 4F
+175+  21D7 43 53 4F 4B
+175+  21DB 20 20 20 20
+175+  21DF 20 39 2E 42
+175+  21E3 52 45 4B 4B
+175+  21E7 20 20 20 20
+175+  21EB 20 31 30 2E
+175+  21EF 50 49 50 45
+175+  21F3 20 4D 41 53
+175+  21F7 54 45 52 20
+175+  21FB 20 20 20 20
+176+  21FF 31 31 2E 48  	db      "11.HITTAN     12.GENGSZTER          "
+176+  2203 49 54 54 41
+176+  2207 4E 20 20 20
+176+  220B 20 20 31 32
+176+  220F 2E 47 45 4E
+176+  2213 47 53 5A 54
+176+  2217 45 52 20 20
+176+  221B 20 20 20 20
+176+  221F 20 20 20 20
+177+  2223
+178+  2223 32 30 32 31  	db      "2021 GAMES: 1.IMPOSSIBLE MISSION     2.BOMBERMAN MEGABLAST     3.NEBULUS     "
+178+  2227 20 47 41 4D
+178+  222B 45 53 3A 20
+178+  222F 31 2E 49 4D
+178+  2233 50 4F 53 53
+178+  2237 49 42 4C 45
+178+  223B 20 4D 49 53
+178+  223F 53 49 4F 4E
+178+  2243 20 20 20 20
+178+  2247 20 32 2E 42
+178+  224B 4F 4D 42 45
+178+  224F 52 4D 41 4E
+178+  2253 20 4D 45 47
+178+  2257 41 42 4C 41
+178+  225B 53 54 20 20
+178+  225F 20 20 20 33
+178+  2263 2E 4E 45 42
+178+  2267 55 4C 55 53
+178+  226B 20 20 20 20
+178+  226F 20
+179+  2270 34 2E 4C 4F  	db      "4.LODE RUNNER     5.SOTET KASTELY     6.GUNFRIGHT     7.MICROPROSE SOCCER     "
+179+  2274 44 45 20 52
+179+  2278 55 4E 4E 45
+179+  227C 52 20 20 20
+179+  2280 20 20 35 2E
+179+  2284 53 4F 54 45
+179+  2288 54 20 4B 41
+179+  228C 53 54 45 4C
+179+  2290 59 20 20 20
+179+  2294 20 20 36 2E
+179+  2298 47 55 4E 46
+179+  229C 52 49 47 48
+179+  22A0 54 20 20 20
+179+  22A4 20 20 37 2E
+179+  22A8 4D 49 43 52
+179+  22AC 4F 50 52 4F
+179+  22B0 53 45 20 53
+179+  22B4 4F 43 43 45
+179+  22B8 52 20 20 20
+179+  22BC 20 20
+180+  22BE 38 2E 54 56  	db      "8.TVC4SNAKES     9.VADASZAT A VOROS OKTOBERREL     10.TANK WARS     "
+180+  22C2 43 34 53 4E
+180+  22C6 41 4B 45 53
+180+  22CA 20 20 20 20
+180+  22CE 20 39 2E 56
+180+  22D2 41 44 41 53
+180+  22D6 5A 41 54 20
+180+  22DA 41 20 56 4F
+180+  22DE 52 4F 53 20
+180+  22E2 4F 4B 54 4F
+180+  22E6 42 45 52 52
+180+  22EA 45 4C 20 20
+180+  22EE 20 20 20 31
+180+  22F2 30 2E 54 41
+180+  22F6 4E 4B 20 57
+180+  22FA 41 52 53 20
+180+  22FE 20 20 20 20
+181+  2302 31 31 2E 52  	db      "11.RASTER RUNNER     12.FOGO          "
+181+  2306 41 53 54 45
+181+  230A 52 20 52 55
+181+  230E 4E 4E 45 52
+181+  2312 20 20 20 20
+181+  2316 20 31 32 2E
+181+  231A 46 4F 47 4F
+181+  231E 20 20 20 20
+181+  2322 20 20 20 20
+181+  2326 20 20
+182+  2328
+183+  2328 32 30 32 30  	db      "2020 GAMES: 1.PUCKMAN     2.IKARI WARRIORS     3.RENEGADE     4.QUADRILLION     "
+183+  232C 20 47 41 4D
+183+  2330 45 53 3A 20
+183+  2334 31 2E 50 55
+183+  2338 43 4B 4D 41
+183+  233C 4E 20 20 20
+183+  2340 20 20 32 2E
+183+  2344 49 4B 41 52
+183+  2348 49 20 57 41
+183+  234C 52 52 49 4F
+183+  2350 52 53 20 20
+183+  2354 20 20 20 33
+183+  2358 2E 52 45 4E
+183+  235C 45 47 41 44
+183+  2360 45 20 20 20
+183+  2364 20 20 34 2E
+183+  2368 51 55 41 44
+183+  236C 52 49 4C 4C
+183+  2370 49 4F 4E 20
+183+  2374 20 20 20 20
+184+  2378 35 2E 56 4F  	db      "5.VOTE2020     6.XORGAME     7.BOMBER     8.MULTITETRIS          "
+184+  237C 54 45 32 30
+184+  2380 32 30 20 20
+184+  2384 20 20 20 36
+184+  2388 2E 58 4F 52
+184+  238C 47 41 4D 45
+184+  2390 20 20 20 20
+184+  2394 20 37 2E 42
+184+  2398 4F 4D 42 45
+184+  239C 52 20 20 20
+184+  23A0 20 20 38 2E
+184+  23A4 4D 55 4C 54
+184+  23A8 49 54 45 54
+184+  23AC 52 49 53 20
+184+  23B0 20 20 20 20
+184+  23B4 20 20 20 20
+184+  23B8 20
+185+  23B9
+186+  23B9 32 30 31 39  	db      "2019 GAMES: 1.IK+     2.FUSS!     3.DONKEY KONG JR.     4.CROSSFIRE     "
+186+  23BD 20 47 41 4D
+186+  23C1 45 53 3A 20
+186+  23C5 31 2E 49 4B
+186+  23C9 2B 20 20 20
+186+  23CD 20 20 32 2E
+186+  23D1 46 55 53 53
+186+  23D5 21 20 20 20
+186+  23D9 20 20 33 2E
+186+  23DD 44 4F 4E 4B
+186+  23E1 45 59 20 4B
+186+  23E5 4F 4E 47 20
+186+  23E9 4A 52 2E 20
+186+  23ED 20 20 20 20
+186+  23F1 34 2E 43 52
+186+  23F5 4F 53 53 46
+186+  23F9 49 52 45 20
+186+  23FD 20 20 20 20
+187+  2401 35 2E 47 4F  	db      "5.GOMBOCFALO     6.FILLER          "
+187+  2405 4D 42 4F 43
+187+  2409 46 41 4C 4F
+187+  240D 20 20 20 20
+187+  2411 20 36 2E 46
+187+  2415 49 4C 4C 45
+187+  2419 52 20 20 20
+187+  241D 20 20 20 20
+187+  2421 20 20 20
+188+  2424
+189+  2424 54 48 41 4E  	db      "THANKS TO ATTILA GROSZ , ISTVAN VARGA , GYORGY VINCE BELA , KEVIN THECKER , "
+189+  2428 4B 53 20 54
+189+  242C 4F 20 41 54
+189+  2430 54 49 4C 41
+189+  2434 20 47 52 4F
+189+  2438 53 5A 20 2C
+189+  243C 20 49 53 54
+189+  2440 56 41 4E 20
+189+  2444 56 41 52 47
+189+  2448 41 20 2C 20
+189+  244C 47 59 4F 52
+189+  2450 47 59 20 56
+189+  2454 49 4E 43 45
+189+  2458 20 42 45 4C
+189+  245C 41 20 2C 20
+189+  2460 4B 45 56 49
+189+  2464 4E 20 54 48
+189+  2468 45 43 4B 45
+189+  246C 52 20 2C 20
+190+  2470 53 41 4E 44  	db      "SANDOR VASS , KRISZTIAN MARTA , KAROLY KISS , ZSOLT MARI , TAMAS MAJOR"
+190+  2474 4F 52 20 56
+190+  2478 41 53 53 20
+190+  247C 2C 20 4B 52
+190+  2480 49 53 5A 54
+190+  2484 49 41 4E 20
+190+  2488 4D 41 52 54
+190+  248C 41 20 2C 20
+190+  2490 4B 41 52 4F
+190+  2494 4C 59 20 4B
+190+  2498 49 53 53 20
+190+  249C 2C 20 5A 53
+190+  24A0 4F 4C 54 20
+190+  24A4 4D 41 52 49
+190+  24A8 20 2C 20 54
+190+  24AC 41 4D 41 53
+190+  24B0 20 4D 41 4A
+190+  24B4 4F 52
+191+  24B6 20 20 20 20          db      "          "
+191+  24BA 20 20 20 20
+191+  24BE 20 20
+192+  24C0
+193+  24C0 47 52 45 45  	db      "GREETINGS TO GABOR SZAKACS , ATTILA ABONYI , ATTILA MIKLAN , KAROLY NAGY , "
+193+  24C4 54 49 4E 47
+193+  24C8 53 20 54 4F
+193+  24CC 20 47 41 42
+193+  24D0 4F 52 20 53
+193+  24D4 5A 41 4B 41
+193+  24D8 43 53 20 2C
+193+  24DC 20 41 54 54
+193+  24E0 49 4C 41 20
+193+  24E4 41 42 4F 4E
+193+  24E8 59 49 20 2C
+193+  24EC 20 41 54 54
+193+  24F0 49 4C 41 20
+193+  24F4 4D 49 4B 4C
+193+  24F8 41 4E 20 2C
+193+  24FC 20 4B 41 52
+193+  2500 4F 4C 59 20
+193+  2504 4E 41 47 59
+193+  2508 20 2C 20
+194+  250B 47 41 42 4F  	db      "GABOR FORRAI , BALAZS VASVARI , ZSOLT VARADY , JARL FREY , PETER FOLDESI , "
+194+  250F 52 20 46 4F
+194+  2513 52 52 41 49
+194+  2517 20 2C 20 42
+194+  251B 41 4C 41 5A
+194+  251F 53 20 56 41
+194+  2523 53 56 41 52
+194+  2527 49 20 2C 20
+194+  252B 5A 53 4F 4C
+194+  252F 54 20 56 41
+194+  2533 52 41 44 59
+194+  2537 20 2C 20 4A
+194+  253B 41 52 4C 20
+194+  253F 46 52 45 59
+194+  2543 20 2C 20 50
+194+  2547 45 54 45 52
+194+  254B 20 46 4F 4C
+194+  254F 44 45 53 49
+194+  2553 20 2C 20
+195+  2556 54 41 4D 41  	db      "TAMAS LENHARDT , ANDRAS KOVER , GERGELY SZELEI , TAMAS BEREGI , ZSOLT PRIEVARA , "
+195+  255A 53 20 4C 45
+195+  255E 4E 48 41 52
+195+  2562 44 54 20 2C
+195+  2566 20 41 4E 44
+195+  256A 52 41 53 20
+195+  256E 4B 4F 56 45
+195+  2572 52 20 2C 20
+195+  2576 47 45 52 47
+195+  257A 45 4C 59 20
+195+  257E 53 5A 45 4C
+195+  2582 45 49 20 2C
+195+  2586 20 54 41 4D
+195+  258A 41 53 20 42
+195+  258E 45 52 45 47
+195+  2592 49 20 2C 20
+195+  2596 5A 53 4F 4C
+195+  259A 54 20 50 52
+195+  259E 49 45 56 41
+195+  25A2 52 41 20 2C
+195+  25A6 20
+196+  25A7 47 41 42 4F  	db      "GABOR STOCKERT , CSABA NAGY , ZOLTAN NEMETH , JOZSEF LUKACS , NORBERT DOMJAN , "
+196+  25AB 52 20 53 54
+196+  25AF 4F 43 4B 45
+196+  25B3 52 54 20 2C
+196+  25B7 20 43 53 41
+196+  25BB 42 41 20 4E
+196+  25BF 41 47 59 20
+196+  25C3 2C 20 5A 4F
+196+  25C7 4C 54 41 4E
+196+  25CB 20 4E 45 4D
+196+  25CF 45 54 48 20
+196+  25D3 2C 20 4A 4F
+196+  25D7 5A 53 45 46
+196+  25DB 20 4C 55 4B
+196+  25DF 41 43 53 20
+196+  25E3 2C 20 4E 4F
+196+  25E7 52 42 45 52
+196+  25EB 54 20 44 4F
+196+  25EF 4D 4A 41 4E
+196+  25F3 20 2C 20
+197+  25F6 49 4D 52 45  	db      "IMRE EGRI , LEVENTE HARSFALVI , SZERGELY BUTOV , OLIVER OROSZ , ZOLTAN GUGI , "
+197+  25FA 20 45 47 52
+197+  25FE 49 20 2C 20
+197+  2602 4C 45 56 45
+197+  2606 4E 54 45 20
+197+  260A 48 41 52 53
+197+  260E 46 41 4C 56
+197+  2612 49 20 2C 20
+197+  2616 53 5A 45 52
+197+  261A 47 45 4C 59
+197+  261E 20 42 55 54
+197+  2622 4F 56 20 2C
+197+  2626 20 4F 4C 49
+197+  262A 56 45 52 20
+197+  262E 4F 52 4F 53
+197+  2632 5A 20 2C 20
+197+  2636 5A 4F 4C 54
+197+  263A 41 4E 20 47
+197+  263E 55 47 49 20
+197+  2642 2C 20
+198+  2644 50 45 54 45  	db      "PETER GYONGYOSSY , GABOR MAJOR , ZSOLT MOLNAR , ZOLTAN MOLNAR , KRISZTIAN MAKAI , "
+198+  2648 52 20 47 59
+198+  264C 4F 4E 47 59
+198+  2650 4F 53 53 59
+198+  2654 20 2C 20 47
+198+  2658 41 42 4F 52
+198+  265C 20 4D 41 4A
+198+  2660 4F 52 20 2C
+198+  2664 20 5A 53 4F
+198+  2668 4C 54 20 4D
+198+  266C 4F 4C 4E 41
+198+  2670 52 20 2C 20
+198+  2674 5A 4F 4C 54
+198+  2678 41 4E 20 4D
+198+  267C 4F 4C 4E 41
+198+  2680 52 20 2C 20
+198+  2684 4B 52 49 53
+198+  2688 5A 54 49 41
+198+  268C 4E 20 4D 41
+198+  2690 4B 41 49 20
+198+  2694 2C 20
+199+  2696 4C 41 53 5A  	db      "LASZLO BUZA , TAMAS KALMAN , ZSOLT KARPATI , ISTVAN SARANSZKI , ATTILA SZABO , "
+199+  269A 4C 4F 20 42
+199+  269E 55 5A 41 20
+199+  26A2 2C 20 54 41
+199+  26A6 4D 41 53 20
+199+  26AA 4B 41 4C 4D
+199+  26AE 41 4E 20 2C
+199+  26B2 20 5A 53 4F
+199+  26B6 4C 54 20 4B
+199+  26BA 41 52 50 41
+199+  26BE 54 49 20 2C
+199+  26C2 20 49 53 54
+199+  26C6 56 41 4E 20
+199+  26CA 53 41 52 41
+199+  26CE 4E 53 5A 4B
+199+  26D2 49 20 2C 20
+199+  26D6 41 54 54 49
+199+  26DA 4C 41 20 53
+199+  26DE 5A 41 42 4F
+199+  26E2 20 2C 20
+200+  26E5 47 41 42 4F  	db	"GABOR FEHER , ATTILA VASS , ZOLTAN HOLLOSY , "
+200+  26E9 52 20 46 45
+200+  26ED 48 45 52 20
+200+  26F1 2C 20 41 54
+200+  26F5 54 49 4C 41
+200+  26F9 20 56 41 53
+200+  26FD 53 20 2C 20
+200+  2701 5A 4F 4C 54
+200+  2705 41 4E 20 48
+200+  2709 4F 4C 4C 4F
+200+  270D 53 59 20 2C
+200+  2711 20
+201+  2712 41 54 54 49          db      "ATTILA LOSONCZI , JOZSEF TRENCSENYI , ERNO ZALKA , EVA KRAVLICS , BENCE BORDAS , "
+201+  2716 4C 41 20 4C
+201+  271A 4F 53 4F 4E
+201+  271E 43 5A 49 20
+201+  2722 2C 20 4A 4F
+201+  2726 5A 53 45 46
+201+  272A 20 54 52 45
+201+  272E 4E 43 53 45
+201+  2732 4E 59 49 20
+201+  2736 2C 20 45 52
+201+  273A 4E 4F 20 5A
+201+  273E 41 4C 4B 41
+201+  2742 20 2C 20 45
+201+  2746 56 41 20 4B
+201+  274A 52 41 56 4C
+201+  274E 49 43 53 20
+201+  2752 2C 20 42 45
+201+  2756 4E 43 45 20
+201+  275A 42 4F 52 44
+201+  275E 41 53 20 2C
+201+  2762 20
+202+  2763 49 4D 52 45          db      "IMRE TANACS , GABOR ORVOS , IMRE E. ELOD , PETER BREUER , ROMEO REIDL , TAMAS BESZEDA , "
+202+  2767 20 54 41 4E
+202+  276B 41 43 53 20
+202+  276F 2C 20 47 41
+202+  2773 42 4F 52 20
+202+  2777 4F 52 56 4F
+202+  277B 53 20 2C 20
+202+  277F 49 4D 52 45
+202+  2783 20 45 2E 20
+202+  2787 45 4C 4F 44
+202+  278B 20 2C 20 50
+202+  278F 45 54 45 52
+202+  2793 20 42 52 45
+202+  2797 55 45 52 20
+202+  279B 2C 20 52 4F
+202+  279F 4D 45 4F 20
+202+  27A3 52 45 49 44
+202+  27A7 4C 20 2C 20
+202+  27AB 54 41 4D 41
+202+  27AF 53 20 42 45
+202+  27B3 53 5A 45 44
+202+  27B7 41 20 2C 20
+203+  27BB 43 53 41 42          db      "CSABA LASZLO BACSKAY , OSZVALD BALAZS , ZOLTAN J FEHER , JANOS KISTAMAS , TAMAS BODNAR , SZILARD MATUSIK"
+203+  27BF 41 20 4C 41
+203+  27C3 53 5A 4C 4F
+203+  27C7 20 42 41 43
+203+  27CB 53 4B 41 59
+203+  27CF 20 2C 20 4F
+203+  27D3 53 5A 56 41
+203+  27D7 4C 44 20 42
+203+  27DB 41 4C 41 5A
+203+  27DF 53 20 2C 20
+203+  27E3 5A 4F 4C 54
+203+  27E7 41 4E 20 4A
+203+  27EB 20 46 45 48
+203+  27EF 45 52 20 2C
+203+  27F3 20 4A 41 4E
+203+  27F7 4F 53 20 4B
+203+  27FB 49 53 54 41
+203+  27FF 4D 41 53 20
+203+  2803 2C 20 54 41
+203+  2807 4D 41 53 20
+203+  280B 42 4F 44 4E
+203+  280F 41 52 20 2C
+203+  2813 20 53 5A 49
+203+  2817 4C 41 52 44
+203+  281B 20 4D 41 54
+203+  281F 55 53 49 4B
+204+  2823 50 45 52 53          db      "PERSA NOEL , ROBERT KIS , PETER HOVANYI"
+204+  2827 41 20 4E 4F
+204+  282B 45 4C 20 2C
+204+  282F 20 52 4F 42
+204+  2833 45 52 54 20
+204+  2837 4B 49 53 20
+204+  283B 2C 20 50 45
+204+  283F 54 45 52 20
+204+  2843 48 4F 56 41
+204+  2847 4E 59 49
+205+  284A 20 20 20 20          db      "          "
+205+  284E 20 20 20 20
+205+  2852 20 20
+206+  2854
+207+  2854 53 50 45 43          db      "SPECIAL THANKS TO ZSOLT BERTOK FOR ORGANIZING SUCH AN EXCITING COMPETITION          "
+207+  2858 49 41 4C 20
+207+  285C 54 48 41 4E
+207+  2860 4B 53 20 54
+207+  2864 4F 20 5A 53
+207+  2868 4F 4C 54 20
+207+  286C 42 45 52 54
+207+  2870 4F 4B 20 46
+207+  2874 4F 52 20 4F
+207+  2878 52 47 41 4E
+207+  287C 49 5A 49 4E
+207+  2880 47 20 53 55
+207+  2884 43 48 20 41
+207+  2888 4E 20 45 58
+207+  288C 43 49 54 49
+207+  2890 4E 47 20 43
+207+  2894 4F 4D 50 45
+207+  2898 54 49 54 49
+207+  289C 4F 4E 20 20
+207+  28A0 20 20 20 20
+207+  28A4 20 20 20 20
+208+  28A8
+209+  28A8 4D 45 47 41          db      "MEGAPLEX IS MADE BY USING DEVTOOL , VISUAL STUDIO CODE , SJASM , YATE          MADE IN HUNGARY 2021-2022"
+209+  28AC 50 4C 45 58
+209+  28B0 20 49 53 20
+209+  28B4 4D 41 44 45
+209+  28B8 20 42 59 20
+209+  28BC 55 53 49 4E
+209+  28C0 47 20 44 45
+209+  28C4 56 54 4F 4F
+209+  28C8 4C 20 2C 20
+209+  28CC 56 49 53 55
+209+  28D0 41 4C 20 53
+209+  28D4 54 55 44 49
+209+  28D8 4F 20 43 4F
+209+  28DC 44 45 20 2C
+209+  28E0 20 53 4A 41
+209+  28E4 53 4D 20 2C
+209+  28E8 20 59 41 54
+209+  28EC 45 20 20 20
+209+  28F0 20 20 20 20
+209+  28F4 20 20 20 4D
+209+  28F8 41 44 45 20
+209+  28FC 49 4E 20 48
+209+  2900 55 4E 47 41
+209+  2904 52 59 20 32
+209+  2908 30 32 31 2D
+209+  290C 32 30 32 32
+210+  2910
+211+  2910 20 20 20 20          db      "                               ", 0
+211+  2914 20 20 20 20
+211+  2918 20 20 20 20
+211+  291C 20 20 20 20
+211+  2920 20 20 20 20
+211+  2924 20 20 20 20
+211+  2928 20 20 20 20
+211+  292C 20 20 20 00
+# file closed: textscroll.a80
+944   2930                      include "chars.a80"
+# file opened: chars.a80
+  1+  2930
+  2+  2930              ;-----------------------------------------------------------------------------------------
+  3+  2930              ;	Karakter kirakó és szám konvertáló rutinok
+  4+  2930              ;-----------------------------------------------------------------------------------------
+  5+  2930
+  6+  2930              		;{	SetCharColor
+  7+  2930              		;	'A': alsó 4 (0-3) bit color index, 4. bit ha 1, akkor maszkolva teszi ki a szöveget.
+  8+  2930              		;	Az 5. bitnek csak a maszkolt kirakásnál van jelentése: ha az 1-ben áll, akkor a szóköz fele szélességgel lesz kirakva
+  9+  2930              CharColorTable:
+ 10+  2930 00                   db	COLOR_BLACK*3
+ 11+  2931 03                   db	COLOR_DARKBLUE*3
+ 12+  2932 0C                   db	COLOR_DARKRED*3
+ 13+  2933 0F                   db	COLOR_DARKMAGENTA*3
+ 14+  2934 30                   db	COLOR_DARKGREEN*3
+ 15+  2935 33                   db	COLOR_DARKCYAN*3
+ 16+  2936 3C                   db	COLOR_DARKYELLOW*3
+ 17+  2937 3F                   db	COLOR_GRAY*3
+ 18+  2938 C0                   db	COLOR_BLACK2*3
+ 19+  2939 C3                   db	COLOR_BLUE*3
+ 20+  293A CC                   db	COLOR_RED*3
+ 21+  293B CF                   db	COLOR_MAGENTA*3
+ 22+  293C F0                   db	COLOR_GREEN*3
+ 23+  293D F3                   db	COLOR_CYAN*3
+ 24+  293E FC                   db	COLOR_YELLOW*3
+ 25+  293F FF                   db	COLOR_WHITE*3
+ 26+  2940
+ 27+  2940 00           CharColorSave:		db	0
+ 28+  2941 00           CharBackgroundSave:     db      0
+ 29+  2942
+ 30+  2942
+ 31+  2942              SetCharacterBackgroundColor:
+ 32+  2942 32 41 29             ld	(CharBackgroundSave),a          ; Save background color index
+ 33+  2945
+ 34+  2945 47                   ld	b,a			        ; load color index into B
+ 35+  2946 E6 0F                and	15			        ; only index
+ 36+  2948
+ 37+  2948 21 30 29             ld	hl,CharColorTable	        ; calculate color table address
+ 38+  294B 5F                   ld	e,a
+ 39+  294C 16 00                ld	d,0
+ 40+  294E 19                   add	hl,de
+ 41+  294F
+ 42+  294F 7E                   ld	a,(hl)			        ; load color code to A
+ 43+  2950
+ 44+  2950                      ; store backgound color
+ 45+  2950 32 39 2A             ld	(CharBackgroundSave1+1),a
+ 46+  2953 32 46 2A             ld	(CharBackgroundSave2+1),a
+ 47+  2956
+ 48+  2956 C9                   ret
+ 49+  2957
+ 50+  2957
+ 51+  2957              SetCharColor:
+ 52+  2957 32 40 29             ld	(CharColorSave),a	; Lementjük a szín indexet
+ 53+  295A
+ 54+  295A 47                   ld	b,a			; 'B'-be kerül a szín index
+ 55+  295B E6 0F                and	15			; kimaszkoljuk az alsó 4 bitet, mert az indexet az írja le
+ 56+  295D
+ 57+  295D 21 30 29             ld	hl,CharColorTable	; Színtáblából kiválasztjuk a karakter színét ('E' regiszter)
+ 58+  2960 5F                   ld	e,a			; 'DE' = 'A'
+ 59+  2961 16 00                ld	d,0
+ 60+  2963 19                   add	hl,de			; 'HL'-hez hozzá adjuk a szín indexét, így 'HL' a táblázatban már az adott szín értékre mutat
+ 61+  2964
+ 62+  2964 7E                   ld	a,(hl)			; 'A'=színkód
+ 63+  2965
+ 64+  2965                      ; A következo részben attól függoen, hogy maszoklt vagy felülíró karakter módot választottunk átírjuk a PutChar eljérás programkódjában a hivatkozásokat
+ 65+  2965 CB 60                bit	4,b
+ 66+  2967 20 0E                jr	nz,@MaskMode
+ 67+  2969
+ 68+  2969                                      ; Felülíró karakter kirakónal..
+ 69+  2969 32 33 2A                             ld	(CharColorSave1+1),a	; Elobb a szineket helyettesítjük be a programkódba
+ 70+  296C 32 40 2A                             ld	(CharColorSave2+1),a
+ 71+  296F
+ 72+  296F 21 2F 2A                             ld	hl,PutCharOverwrite	; Majd a rutin belépo kódját az ugró vektorba
+ 73+  2972 22 2D 2A                             ld	(PutCharModeJump+1),hl
+ 74+  2975
+ 75+  2975 18 0C                                jr	@Exit
+ 76+  2977              @MaskMode
+ 77+  2977                                      ; Maszkos karakter kirakónal..
+ 78+  2977 32 5E 2A                             ld	(CharColorSaveMask1+1),a; Elobb a szineket helyettesítjük be a programkódba
+ 79+  297A 32 80 2A                             ld	(CharColorSaveMask2+1),a
+ 80+  297D
+ 81+  297D 21 53 2A                             ld	hl,PutCharMask
+ 82+  2980 22 2D 2A                             ld	(PutCharModeJump+1),hl	; Az ugróvektor most már a 'PutCharMask'-ra mutat
+ 83+  2983              @Exit
+ 84+  2983 C9                                   ret
+ 85+  2984
+ 86+  2984                      ;}
+ 87+  2984
+ 88+  2984                      ;{ 	PutChar
+ 89+  2984                      ;	A: Character code
+ 90+  2984                      ;	B: X
+ 91+  2984                      ;	C: Y
+ 92+  2984
+ 93+  2984 00           SpacePropFlg		db	0			; Ez a flag 0-nál nagyobb, ha maszkolt kirakást szeretnénk félhosszú space karakterrel
+ 94+  2985
+ 95+  2985              PutChar							; Mivel a karakterek bitmap-je nem követi az asscii táblát - a nem használt karakterek képe nincs tárolva - ezért
+ 96+  2985                                                                      ; a karakter kód függvényében másként kell kezelnünk a számokat, az írásjeleket és a betuket
+ 97+  2985
+ 98+  2985 FE 20                                cp	32			; Space kódja ?
+ 99+  2987 20 2B                                jr	nz,@jump0		; Nem! elore a további ellenorzésekhez!
+100+  2989
+101+  2989                                      ; Space karakter
+102+  2989 3A 40 29                             ld	a,(CharColorSave)	; Levizsgáljuk, hogy maszkolt karakter kirakás van-e?
+103+  298C CB 67                                bit	4,a
+104+  298E 28 06                                jr	z,@jmpNotProp		; Ha nem maszkol, akkor tovább
+105+  2990
+106+  2990 E6 20                                and	$20			; Csak a proportopnal bitet tartjuk meg
+107+  2992 32 84 29                             ld	(SpacePropFlg),a
+108+  2995 C9                                   ret				; Ha maszkos kirakás van, akkor nem rajzolunk semmit
+109+  2996              @jmpNotProp
+110+  2996 CB 6F                bit     5, a                    ; condensed space flag
+111+  2998 28 15                jr      z, NormalSpace
+112+  299A
+113+  299A                      ; condensed space
+114+  299A CD A2 2A             call    PosToVidmemAddress
+115+  299D
+116+  299D 3A 39 2A             ld      a, (CharBackgroundSave1+1)
+117+  29A0
+118+  29A0 11 40 00             ld      de, 64
+119+  29A3 06 05                ld      b, 5
+120+  29A5
+121+  29A5              DrawSpaceLoop:
+122+  29A5 77                   ld      (hl), a
+123+  29A6 19                   add     hl, de
+124+  29A7 10 FC                djnz    DrawSpaceLoop
+125+  29A9
+126+  29A9 3E 20                ld      a, $20			                ; flag for condensed space
+127+  29AB 32 84 29             ld	(SpacePropFlg),a
+128+  29AE
+129+  29AE C9                   ret
+130+  29AF
+131+  29AF              NormalSpace
+132+  29AF 11 DC 2C             ld	de,Char_Space		; 'DE'-be a Space címe kerül
+133+  29B2
+134+  29B2 18 75                                jr	@RawAddrOk
+135+  29B4              @jump0
+136+  29B4 FE 2B                                cp	'+'			; '+'?
+137+  29B6 20 05                                jr	nz,@jump2		; Nem! elore a további ellenorzésekhez!
+138+  29B8 11 E6 2C                             ld	de,Char_Plus		; 'DE'-be a '+' címe kerül
+139+  29BB 18 6C                                jr	@RawAddrOk
+140+  29BD              @jump2
+141+  29BD FE 2E                                cp	'.'			; '.'?
+142+  29BF 20 05                                jr	nz,@jump3		; Nem! elore a további ellenorzésekhez!
+143+  29C1 11 F0 2C                             ld	de,Char_Dot		; 'DE'-be a '.' címe kerül
+144+  29C4 18 63                                jr	@RawAddrOk
+145+  29C6              @jump3
+146+  29C6 FE 40                                cp	'@'
+147+  29C8 20 05                                jr	nz,@jump4
+148+  29CA 11 18 2D                             ld	de,Char_Arrow
+149+  29CD 18 5A                                jr	@RawAddrOk
+150+  29CF              @jump4
+151+  29CF FE 3A                                cp	':'
+152+  29D1 20 05                                jr	nz,@jump5
+153+  29D3 11 0E 2D                             ld	de,Char_DotDot
+154+  29D6 18 51                                jr	@RawAddrOk
+155+  29D8
+156+  29D8              @jump5
+157+  29D8 FE 2D                                cp	'-'
+158+  29DA 20 05                                jr	nz,@jump6
+159+  29DC 11 2C 2D                             ld	de,Char_Minus
+160+  29DF 18 48                                jr	@RawAddrOk
+161+  29E1
+162+  29E1              @jump6
+163+  29E1 FE 21                                cp	'!'
+164+  29E3 20 05                                jr	nz,@jump7
+165+  29E5 11 22 2D                             ld	de,Char_Exclamation
+166+  29E8 18 3F                                jr	@RawAddrOk
+167+  29EA
+168+  29EA              @jump7
+169+  29EA FE 2C                                cp	','
+170+  29EC 20 05                                jr	nz,@jump8
+171+  29EE 11 FA 2C                             ld	de,Char_Comma
+172+  29F1 18 36                                jr	@RawAddrOk
+173+  29F3
+174+  29F3              @jump8
+175+  29F3 FE 2F                                cp	'/'
+176+  29F5 20 05                                jr	nz,@jump9
+177+  29F7 11 04 2D                             ld	de,Char_Slash
+178+  29FA 18 2D                                jr	@RawAddrOk
+179+  29FC
+180+  29FC              @jump9
+181+  29FC FE 23                                cp	'#'			; '#'? Ezzel jelöljük a tele négyzet karaktert a szövegben!!!
+182+  29FE 20 05                                jr	nz,@CheckNumberChar	; Nem! elore a további ellenorzésekhez!
+183+  2A00
+184+  2A00 11 D2 2C                             ld	de,Char_Squere		; 'DE'-be a tele négyzet karakter kerül
+185+  2A03 18 24                                jr	@RawAddrOk
+186+  2A05              @CheckNumberChar
+187+  2A05 FE 30                                cp	'0'			; Ellenorizzük, hogy 'A'-ban levo kód szám-e?
+188+  2A07 D8                                   ret	c			; Ha 'A' kisebb mint a '0' karakter kódja, akkor nem rakjuk ki'
+189+  2A08 FE 3A                                cp	'9'+1
+190+  2A0A 28 06                                jr	z,@jump1		; Ha a nagyobb, mint a '9' karakter, akkor már csak betu lehet
+191+  2A0C 30 04                                jr	nc,@jump1		; Irány a betu mezo ellenorzése
+192+  2A0E D6 30                                sub	'0'			; 'A'-ból kivonjuk a '0' karakter kódját, így 'A' már a számot tárolja ami megegyezik a karakter tábla elejétol szmított indexel
+193+  2A10 18 05                                jr	@CharDraw		; Kirajzoljuk az adott
+194+  2A12              @jump1
+195+  2A12 FE 41                                cp	'A'			; A kód nagyobb-e mint az 'A' kódja?
+196+  2A14 D8                                   ret	c			; ha kisebb, akkor nincs ilyen karakter letárolva, nem teszünk ki semmit
+197+  2A15 D6 37                                sub	55			; Az 'A' karakter kódja 65. Mivel a karakter táblában eloször a 10 db szám van letárolva, és nekünk a karakter tábla indexére van szükségünk,
+198+  2A17                                                                      ; esért kivonunk a kerakter értékbol 55. (Kivonunk belole 65-öt, hozzá adunk 10-et - a szám karakterek számát)
+199+  2A17              @CharDraw
+200+  2A17 26 00                                ld	h,0			; 'HL'= a karakter index immáron 16 bites formában, 'A' regiszter a karakter tábla indexe, ezt tesszük át 'HL'-be
+201+  2A19 6F                                   ld	l,a
+202+  2A1A
+203+  2A1A AF                                   xor     a
+204+  2A1B 32 84 29                             ld      (SpacePropFlg), a
+205+  2A1E
+206+  2A1E 29                                   add	hl,hl			; 'HL'='HL'*10
+207+  2A1F 54                                   ld	d,h
+208+  2A20 5D                                   ld	e,l
+209+  2A21 29                                   add	hl,hl
+210+  2A22 29                                   add	hl,hl
+211+  2A23 19                                   add	hl,de
+212+  2A24
+213+  2A24 11 6A 2B                             ld	de,CharacterTable	; 'DE' a legelso karakter adatra mutat
+214+  2A27 19                                   add	hl,de			; 'HL' az adott karakter map-jére mutat
+215+  2A28 EB                                   ex	de,hl			; Most már 'DE' mutat az aktuális karakter map-jére
+216+  2A29              @RawAddrOk:
+217+  2A29 CD A2 2A                             call    PosToVidmemAddress
+218+  2A2C
+219+  2A2C C3 2F 2A     PutCharModeJump		jp	PutCharOverwrite
+220+  2A2F
+221+  2A2F
+222+  2A2F              PutCharOverwrite
+223+  2A2F 06 05                ld	b,5			        ; one character is 5 line tall
+224+  2A31              @Inner1:
+225+  2A31 1A                   ld	a,(de)			        ; load first byte of the character row
+226+  2A32              CharColorSave1:
+227+  2A32 E6 FF                and	$ff			        ; apply color
+228+  2A34 4F                   ld      c, a                            ; save pixel color to c register
+229+  2A35
+230+  2A35 1A                   ld	a,(de)			        ; read again character data
+231+  2A36 EE FF                xor     a, $ff                          ; change it to background mask
+232+  2A38              CharBackgroundSave1:
+233+  2A38 E6 00                and     a, $00                          ; add background color
+234+  2A3A B1                   or      a, c                            ; combine background and foreground color
+235+  2A3B
+236+  2A3B 77                   ld	(hl),a			        ; Store code in the screen memory
+237+  2A3C
+238+  2A3C 13                   inc	de			        ; Next character byte
+239+  2A3D 23                   inc	hl
+240+  2A3E
+241+  2A3E 1A                   ld	a,(de)			        ; Character row second byte
+242+  2A3F              CharColorSave2:
+243+  2A3F E6 FF                and	$ff			        ; apply color
+244+  2A41 4F                   ld      c, a                            ; save pixel color to c register
+245+  2A42
+246+  2A42 1A                   ld	a,(de)			        ; read again character data
+247+  2A43 EE FF                xor     a, $ff                          ; change it to background mask
+248+  2A45              CharBackgroundSave2:
+249+  2A45 E6 00                and     a, $00                          ; add background color
+250+  2A47 B1                   or      a, c                            ; combine background and foreground color
+251+  2A48
+252+  2A48 77                   ld	(hl),a			        ; Store code in the screen memory
+253+  2A49
+254+  2A49 13                   inc	de			        ; Next character byte
+255+  2A4A
+256+  2A4A
+257+  2A4A 78                   ld	a,b			; A 'B'-ben tárolt ciklus változót elmentjük ideiglenesen 'A'-ba
+258+  2A4B 01 3F 00             ld	bc,63
+259+  2A4E 09                   add	hl,bc			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
+260+  2A4F 47                   ld	b,a			; Az ideiglenesen elmentett ciklusváltozót vissza tesszük 'B'-be
+261+  2A50
+262+  2A50 10 DF                djnz	@Inner1
+263+  2A52
+264+  2A52 C9                   ret
+265+  2A53
+266+  2A53              PutCharMask
+267+  2A53 D5                   push	de
+268+  2A54 DD E1                pop	ix
+269+  2A56
+270+  2A56 06 05                ld	b,5			; 5 sorból áll egy karakter
+271+  2A58              @Inner2
+272+  2A58 DD 7E 00             ld	a,(ix+0)		; A karakter RAW sor elso byte-ja 'A'-ba kerül
+273+  2A5B DD 23                inc	ix			; 'DE' a következo címre lép
+274+  2A5D
+275+  2A5D              CharColorSaveMask1
+276+  2A5D E6 FF                and	$ff			; 'A' ban levo raw érték átszínezése
+277+  2A5F
+278+  2A5F 5E                   ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
+279+  2A60
+280+  2A60 4F                   ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
+281+  2A61 E6 AA                and	$aa			; 'A'-ban csak az elso pixel értéke kell!
+282+  2A63 CA 6C 2A             jp	z,@Skip1_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
+283+  2A66
+284+  2A66                      ; Elso pixel maszkolása
+285+  2A66 57                   ld	d,a			; 'D'-ben az elso pixel értéke
+286+  2A67 7B                   ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
+287+  2A68 E6 55                and	$55			; Ebbol csak a 2. pixel értékei kellenek, az elso pixelhez tartozó biteket 0-ba kell álljtani
+288+  2A6A B2                   or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+289+  2A6B 5F                   ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+290+  2A6C              @Skip1_1
+291+  2A6C 79                   ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
+292+  2A6D E6 55                and	$55			; 'A'-ban csak a második pixel értéke kell!
+293+  2A6F CA 78 2A             jp	z,@Skip1_2		; A második pixel üres, nem kell további feldolgozás
+294+  2A72
+295+  2A72                      ; Második pixel maszkolása
+296+  2A72 57                   ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
+297+  2A73 7B                   ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
+298+  2A74 E6 AA                and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
+299+  2A76 B2                   or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit
+300+  2A77 5F                   ld	e,a
+301+  2A78              @Skip1_2
+302+  2A78                      ; 'E' tartalmazza a háttérre maszkolt adatot
+303+  2A78 73                   ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat
+304+  2A79 23                   inc	hl			; és növeljük a célpointer
+305+  2A7A
+306+  2A7A                      ; Hogy ne kelljen vízszintesen ciklus - mivel egy karakter mindösszesen 2 byte (4 pixel) széles, ezért megismételjük a fenti kódot
+307+  2A7A DD 7E 00             ld	a,(ix+0)		; A karakter RAW sor második byte-ja 'A'-ba kerül
+308+  2A7D DD 23                inc	ix			; 'DE' a következo címre lép
+309+  2A7F
+310+  2A7F              CharColorSaveMask2
+311+  2A7F E6 FF                and	$ff			; 'A' ban levo raw érték átszínezése
+312+  2A81
+313+  2A81 5E                   ld	e,(hl)			; 'E' tárolja a kirakandó byte-ot, ami alapból a képernyon levo byte
+314+  2A82
+315+  2A82 4F                   ld	c,a			; 'C'-be is átkerül az adott színure átfestett kirakandó byte
+316+  2A83 E6 AA                and	$aa			; 'A'-ban csak az elso pixel értéke kell!
+317+  2A85 CA 8E 2A             jp	z,@Skip2_1		; Ha az elso pixel üres, akkor nem kell kitenni semmit
+318+  2A88
+319+  2A88                      ; Elso pixel maszkolása
+320+  2A88 57                   ld	d,a			; 'D'-ben az elso pixel értéke
+321+  2A89 7B                   ld	a,e			; 'A'-ba áttesszük az adott képen levo byte-ot
+322+  2A8A E6 55                and	$55			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+323+  2A8C B2                   or	d			; Az adott pixelhez tartozó színkódot OR muvelettel rámásoljuk a képenyon eredeti tartalmát felülírva
+324+  2A8D 5F                   ld	e,a			; A továbbiakhoz 'E'-be mentjük az elso körben így összemixelt értéket
+325+  2A8E
+326+  2A8E              @Skip2_1
+327+  2A8E 79                   ld	a,c			; Jön a második pixel feldolgozása. Ehhez 'A'-ba vissza töltjük az eredeti szjn byteot
+328+  2A8F E6 55                and	$55			; 'A'-ban csak a második pixel értéke kell!
+329+  2A91 CA 9A 2A             jp	z,@Skip2_2		; A második pixel üres, nem kell további feldolgozás
+330+  2A94
+331+  2A94                      ; Második pixel maszkolása
+332+  2A94 57                   ld	d,a			; 'D'-be áttesszük a kirakandó 2. pixel hez tartozó biteket
+333+  2A95 7B                   ld	a,e			; 'A'-ba kerül a képernyo adott címén értelmezett érték
+334+  2A96 E6 AA                and	$aa			; Most az elso pixelhez tartalmazo biteket hagyjuk meg, a 2. pixel bitjeit töröljük--
+335+  2A98 B2                   or	d			; és rámásoljuk a zeloállított szin 2. pixelhez tartozó bitjeit
+336+  2A99 5F                   ld	e,a
+337+  2A9A
+338+  2A9A              @Skip2_2
+339+  2A9A                      ; 'E' tartalmazza a háttérre maszkolt adatot
+340+  2A9A 73                   ld	(hl),e			; A szín kirakása a cél pozicióba, amit 'HL' mutat
+341+  2A9B
+342+  2A9B 11 3F 00             ld	de,63
+343+  2A9E 19                   add	hl,de			; 'HL'-hez hozzá adunk 63-at, így 'HL' a következo képernyo sorra lép
+344+  2A9F
+345+  2A9F 10 B7                djnz	@Inner2
+346+  2AA1
+347+  2AA1 C9                   ret
+348+  2AA2
+349+  2AA2                      ;---------------------------------------------------------------------
+350+  2AA2                      ; Calculates video memory address from coordinates
+351+  2AA2                      ; Input:  B - X
+352+  2AA2                      ;         C - Y
+353+  2AA2                      ; Output: HL - address
+354+  2AA2              PosToVidmemAddress:
+355+  2AA2 69                   ld      l, c                    ; load Y coordinates
+356+  2AA3 26 00                ld      h, 0
+357+  2AA5 29                   add     hl, hl                  ; y *64
+358+  2AA6 29                   add     hl, hl
+359+  2AA7 29                   add     hl, hl
+360+  2AA8 29                   add     hl, hl
+361+  2AA9 29                   add     hl, hl
+362+  2AAA 29                   add     hl, hl
+363+  2AAB
+364+  2AAB 48                   ld      c, b                    ; add x coordinate
+365+  2AAC 06 00                ld      b, 0
+366+  2AAE 09                   add     hl, bc
+367+  2AAF
+368+  2AAF 01 00 80             ld	bc,VIDEOMEM	        ; add video memory address
+369+  2AB2 09                   add	hl,bc
+370+  2AB3
+371+  2AB3 C9                   ret
+372+  2AB4
+373+  2AB4                      ;}
+374+  2AB4
+375+  2AB4                      ;{	DrawStr, DrawColorStr
+376+  2AB4                      ;
+377+  2AB4                      ;	A  következo eláráshoz nem kell sok komment. Szépen kirakja a 'HL' által mutatott szöveget.
+378+  2AB4                      ;	A kirakási folyamat ciklikusan meghívja a PutChar metódust annyiszor, amennyit 'D'-ben megadunk, illetve, míg a bufferben nem talál záró 0 értéket
+379+  2AB4                      ; 	A szövegben található 13-as kódú 'Nev line' karaktert is figyelembe vesszük, hatására a szöveg kirakása új sorban folytatódik
+380+  2AB4                      ;
+381+  2AB4                      ; 	'HL': mutat a kiírandó szövegre
+382+  2AB4                      ;	'B': X
+383+  2AB4                      ;	'C': Y
+384+  2AB4                      ;	'D': kiírandó szöveg hossza
+385+  2AB4 00 00        @StoreStartPos		dw	0			; y,x
+386+  2AB6
+387+  2AB6              ;*	DrawColorStr
+388+  2AB6              ;*				ld	a,(hl)
+389+  2AB6              ;*				inc	hl
+390+  2AB6              ;*				call	SetCharColor
+391+  2AB6              DrawStr
+392+  2AB6 ED 43 B4 2A          ld	(@StoreStartPos),bc	; Lementjük a szöveg elején a szövek kezdo X,Y értékét, hogy esetlegesen az új sor kezdésekor rendelkezésre álljon
+393+  2ABA              @Inner
+394+  2ABA 7E                   ld	a,(hl)			; 'A'-ba a buffer következo eleme
+395+  2ABB 23                   inc	hl			; A buffer mutatóval a következo elemre állunk
+396+  2ABC B7                   or	a			; Ha a kirakandó karakter 0, akkor végeztünk még akkor is, ha egyébként 'D'-ben leírt kirakási hosszt nem értük el
+397+  2ABD C8                   ret	z
+398+  2ABE
+399+  2ABE FE 0D                cp	13			; 'New line' karakter??
+400+  2AC0 20 0E                jr	nz,PutChar1		; Ha nem, akkor tovább a karakter kirajzolására
+401+  2AC2
+402+  2AC2 ED 4B B4 2A          ld	bc,(@StoreStartPos)	; Ha 'New line' karakter volt, akkor 'BC'-be visszatöltjük az elozo sor kezdo X,Y pontját
+403+  2AC6 79                   ld	a,c			; 'A' = Y
+404+  2AC7 C6 07                add	a,CHAR_HEIGHT		; 'A' = Y + karakter magassága
+405+  2AC9 4F                   ld	c,a			; 'C'-be vissza tesszük az új Y értéket
+406+  2ACA ED 43 B4 2A          ld	(@StoreStartPos),bc	; Majd az X,Y értéket - mint új sor elso pozícióját - újra letároljuk, ha késobb szükség lenne rá
+407+  2ACE 18 11                jr	@SkipChar
+408+  2AD0              PutChar1
+409+  2AD0 E5                   push	hl			; Kirakjuk a karaktert
+410+  2AD1 D5                   push	de
+411+  2AD2 C5                   push	bc
+412+  2AD3 CD 85 29             call	PutChar
+413+  2AD6 C1                   pop	bc
+414+  2AD7 D1                   pop	de
+415+  2AD8 E1                   pop	hl
+416+  2AD9
+417+  2AD9                      ; 'B' tárolja karakter X pozícióját. Egy karakter 2 byte széles. Most hozzá adunk 1-et v. 2-t annak a függvényében, hogy a 'SpacePropFlg' flag be van-e kapcsolva
+418+  2AD9 04                   inc	b
+419+  2ADA
+420+  2ADA 3A 84 29             ld	a,(SpacePropFlg)	; Levizsgáljuk, hogy maszkolt karakter kirakás van-e?
+421+  2ADD B7                   or	a
+422+  2ADE 20 01                jr	nz,@SkipChar
+423+  2AE0
+424+  2AE0 04                   inc	b
+425+  2AE1              @SkipChar
+426+  2AE1 15                   dec	d			; Csökkentjük 'D' értékét,
+427+  2AE2 C2 BA 2A             jp	nz,@Inner		; és ha még nem értünk az utolsó kirakandó karakterre, akkor vissza a ciklus elejére
+428+  2AE5
+429+  2AE5 C9                   ret
+430+  2AE6                      ;}
+431+  2AE6
+432+  2AE6                      ;{	DrawNumber
+433+  2AE6                      ; 	HL: A kiírandó szám
+434+  2AE6                      ;	B: X
+435+  2AE6                      ;	C: Y
+436+  2AE6                      ;	A: A szám mezo szélessége. Ha A=0, akkor balra igazít különben jobbra
+437+  2AE6              DrawNumber
+438+  2AE6 F5                   push	af			; 'A' mentése, mert a végén szükség lesz rá a jobbra igazításnál
+439+  2AE7 C5                   push	bc			; 'BC'-ben most az X,Y pozíció van, ezt azért kell menteni, mert erre meg majd a jobbra igazításnál és a szöveg kiírásnál lesz szükség
+440+  2AE8
+441+  2AE8 3E 00                ld	a,0			; 'HL' karakterekké konvertálása
+442+  2AEA CD 10 2B             call	ConvertDecNum16
+443+  2AED 51                   ld	d,c			; Most már 'BC' a kiírandó szám hosszát mutatja (ez mindig kisebb 255-nél, tehát a 'C'-ben van a hossz), viszont a szöveg kiíráshoz 'D'-ben kell a hossz
+444+  2AEE
+445+  2AEE C1                   pop	bc			; Vissza töltjük 'BC'-be az X,Y pozíciót
+446+  2AEF F1                   pop	af			; illeve 'A'-ba a szám mezo sélességét az igazításhoz
+447+  2AF0
+448+  2AF0 B7                   or	a			; Ha 'A' 0, akkor nem kell igazítani csak simán kiírni a szám buffer tartalmát
+449+  2AF1 28 05                jr	z,@jump
+450+  2AF3
+451+  2AF3 92                   sub	d			; Jobbra igazítás: 'A' mutatja a szám mezo szélességét, 'D' pedig a konvertált szám hossza. 'A'-'B' megadja hány karakterrel kell arrébb tenni a kiírást
+452+  2AF4 D8                   ret	c			; Ha túl kicsi a megadott szám mezo hossz, akkor nincs kiírás
+453+  2AF5
+454+  2AF5 87                   add	a,a			; A jobbra tolás hosszát szorozzuk 2-vel (1 karakter szélessége byt-okban)
+455+  2AF6 80                   add	a,b			; majd az X pozícióhoz ('B'-ben van) hozzá adjuk
+456+  2AF7 47                   ld	b,a
+457+  2AF8              @jump
+458+  2AF8 CD B6 2A             call	DrawStr			; Kiírjuk a szám buffer tartalmát
+459+  2AFB C9                   ret
+460+  2AFC
+461+  2AFC
+462+  2AFC 10 27 E8 03  NumRef			dw	10000,1000,100,10,0
+462+  2B00 64 00 0A 00
+462+  2B04 00 00
+463+  2B06 00           X10			db	0			; Tízszeres kijelzés - azaz 1db 0-t ír utána, ha ez nem 0.
+464+  2B07 30 30 30 30  NumBfr			db	'0','0','0','0','0','0',0
+464+  2B0B 30 30 00
+465+  2B0E 30 00        NumBfrEmpty		db	'0',0
+466+  2B10
+467+  2B10
+468+  2B10              ConvertDecNum16
+469+  2B10 3E 30                ld	a,'0'
+470+  2B12 32 39 2B             ld	(@modify+1),a
+471+  2B15
+472+  2B15 7C                   ld	a,h			; 'A'-ba tesszük 'H' értékét, majd.
+473+  2B16 B5                   or	l			; or-oljuk 'L'-lel
+474+  2B17 20 05                jr	nz,@n7
+475+  2B19                                                      ; 'H' és 'L' értéke is 0 - azaz 'HL' = 0
+476+  2B19 21 0E 2B             ld	hl,NumBfrEmpty		; 'HL'-el most már a 'NumBfrEmpty'-re mutatunk..
+477+  2B1C 18 3B                jr	StrLen			; és kiírjuk a 0-t karakteresen
+478+  2B1E              @n7
+479+  2B1E 01 07 2B             ld	bc,NumBfr		; 'BC' fogja mutatni a számot jelképezo karakterlánc aktuális címét. Most a buffer elejére állítjuk
+480+  2B21 11 FC 2A             ld	de,NumRef		; 'DE' viszont a referencia tábla elemét fogja mutatni, amivel aktuálisan össze kell hasonlítani 'HL' értékét
+481+  2B24              @n2
+482+  2B24 C5                   push	bc
+483+  2B25
+484+  2B25 EB                   ex	de,hl			; 'DE'-t és 'HL'-t megcseréljük, így a referencia érték tábla aktuális elemére most 'HL' mutat
+485+  2B26 4E                   ld	c,(hl)			; 'BC'-be betöltjük a '(HL)' címen levo adatot, 'HL'-t pedig léptetjük a késobbiekhez a következo elemre
+486+  2B27 23                   inc	hl
+487+  2B28 46                   ld	b,(hl)
+488+  2B29 23                   inc	hl
+489+  2B2A EB                   ex	de,hl			; 'HL'-t vissza rakjuk 'DE'-be
+490+  2B2B
+491+  2B2B 78                   ld	a,b			; A referencia - 'BC' - értéke 0?
+492+  2B2C B1                   or	c
+493+  2B2D 28 15                jr	z,@n3			; Ha 0, akkor vége a ciklikus vizsgálatnak
+494+  2B2F
+495+  2B2F 3E 2F                ld	a,'0'-1			; 'A'-ba a '0' karakter értékénél egyel kisebb értéket teszünk, hogy a következo INC A utasításra pont '0' kerüljön bele
+496+  2B31              @n1
+497+  2B31 3C                   inc	a			; A következo ciklusban megszámoljuk, hogy 'HL'-bol hányszor tudjuk kivonni 'BC'-t azaz az adott tizes helyiértéken levo referenciát
+498+  2B32 ED 42                sbc	hl,bc
+499+  2B34 30 FB                jr	nc,@n1			; Ha 'HL' > 'BC', akkor még mindig lehet csökkenteni 'HL' értékét 'BC'-vel
+500+  2B36 09                   add	hl,bc			; 'Most már 'HL' kisebb, mint a referencia, a kivonás után tulcsordulás történt, ezért kompenzálásként hozzá adjuk 'HL'-hez 'BC'-t, így 'HL' az osztás maradéka lesz
+501+  2B37
+502+  2B37 C1                   pop	bc			; 'BC'-be visszatesszük a buffer pountert
+503+  2B38
+504+  2B38              @modify
+505+  2B38 FE 30                cp	'0'			; Megnézzük, hogy a kapott karakter érték '0'-e?
+506+  2B3A 28 E8                jr	z,@n2			; Ha '0', akkor vissz ugrunk a ciklus elejére, hogy kiértékeljük a következo tizedes helyiértéket
+507+  2B3C
+508+  2B3C 02                   ld	(bc),a			; A 'BC' által mutatott buffer pozícióba letesszük a karakter kódját
+509+  2B3D 03                   inc	bc			; és növeljük a buffer pointer értékét
+510+  2B3E
+511+  2B3E AF                   xor	a
+512+  2B3F 32 39 2B             ld	(@modify+1),a		; módosítjuk a "CP '0'" utasítást "CP 0"-ra
+513+  2B42 18 E0                jr	@n2			; vissza a következo helyiérték kiértékelésére
+514+  2B44              @n3
+515+  2B44 C1                   pop	bc			; Vége a ciklusnak. Mivel a ciklus elso utasítában letettük a stack-be a 'BC' értékét, most vissza is tesszük ezt az értéket 'BC'-be
+516+  2B45
+517+  2B45 3E 30                ld	a,'0'			; 'L'-ben az utolsó helyiérték osztásából a maradék lapul..
+518+  2B47 85                   add	a,l			; ezért hozzá adjuk a '0' karakter értékét, ezzel megvan az utolsó helyiérték kódja
+519+  2B48 02                   ld	(bc),a			; ezt bele tesszük a buffer adott pozíciójára
+520+  2B49 03                   inc	bc			; majd növeljük a buffer mutató 'BC' értékét
+521+  2B4A
+522+  2B4A 3A 06 2B             ld	a,(X10)			; Az 'X10' jelzés be van állítva?
+523+  2B4D B7                   or	a
+524+  2B4E 28 04                jr	z,@n4			; A jelzés értéke 0, tehát nincs.. a következo részt kihagyjuk
+525+  2B50
+526+  2B50 3E 30                ld	a,'0'			; Az 'X10' jelzés be van állítva, a szám karakteresen leírt bufferében utána írunk még egy '0' karaktert
+527+  2B52 02                   ld	(bc),a
+528+  2B53 03                   inc	bc
+529+  2B54
+530+  2B54              @n4
+531+  2B54 AF                   xor	a			; Vége a konverziónak, már csak a záró 0-t kell az utolsó buffer pozícióra kirakni
+532+  2B55 02                   ld	(bc),a
+533+  2B56              @n5
+534+  2B56 21 07 2B             ld	hl,NumBfr		; 'HL'-be betesszük a karakteresen ábrázolt számot leíró buffer kezdocímét
+535+  2B59
+536+  2B59                      ; Önállóan is hívható eljárás. 'HL' a szövegbuffer elejét tartalmazza. Eredmény: 'BC'-ben a 'HL' által mutatott 0 értékkel lezárt szöveg hossza
+537+  2B59              StrLen
+538+  2B59 E5                   push	hl
+539+  2B5A 01 00 00             ld	bc,0
+540+  2B5D              @n6
+541+  2B5D 7E                   ld	a,(hl)
+542+  2B5E B7                   or	a
+543+  2B5F 28 04                jr	z,@end
+544+  2B61 23                   inc	hl
+545+  2B62 03                   inc	bc
+546+  2B63 18 F8                jr	@n6
+547+  2B65              @end
+548+  2B65 E1                   pop	hl
+549+  2B66 C9                   ret
+550+  2B67
+551+  2B67                      ;{ 	szín és grafikus mód konstansok
+552+  2B67                      ; Palette színkódok Graphics 2 és Graphincs 4 módokban
+553+  2B67              COLOR_BLACK		equ	0			; Graphics 16 esetén az értéke: 0
+554+  2B67              COLOR_DARKBLUE		equ	1			; Graphics 16 esetén az értéke: 1
+555+  2B67              COLOR_DARKRED		equ	4			; Graphics 16 esetén az értéke: 2
+556+  2B67              COLOR_DARKMAGENTA	equ	5			; Graphics 16 esetén az értéke: 3
+557+  2B67              COLOR_DARKGREEN		equ	16			; Graphics 16 esetén az értéke: 4
+558+  2B67              COLOR_DARKCYAN		equ	17			; Graphics 16 esetén az értéke: 5
+559+  2B67              COLOR_DARKYELLOW	equ	20			; Graphics 16 esetén az értéke: 6
+560+  2B67              COLOR_GRAY		equ	21			; Graphics 16 esetén az értéke: 7
+561+  2B67              COLOR_BLACK2		equ	64			; Graphics 16 esetén az értéke: 8
+562+  2B67              COLOR_BLUE		equ	65			; Graphics 16 esetén az értéke: 9
+563+  2B67              COLOR_RED		equ	68			; Graphics 16 esetén az értéke: 10
+564+  2B67              COLOR_MAGENTA		equ	69			; Graphics 16 esetén az értéke: 11
+565+  2B67              COLOR_GREEN		equ	80			; Graphics 16 esetén az értéke: 12
+566+  2B67              COLOR_CYAN		equ	81			; Graphics 16 esetén az értéke: 13
+567+  2B67              COLOR_YELLOW		equ	84			; Graphics 16 esetén az értéke: 14
+568+  2B67              COLOR_WHITE		equ	85			; Graphics 16 esetén az értéke: 15
+569+  2B67                      ; Border színkódok (minden grafikus módban megegyeznek)
+570+  2B67              BORDER_BLACK		equ	0
+571+  2B67              BORDER_DARKBLUE		equ	2
+572+  2B67              BORDER_DARKRED		equ	8
+573+  2B67              BORDER_DARKMAGENTA	equ	10
+574+  2B67              BORDER_DARKGREEN	equ	32
+575+  2B67              BORDER_DARKCYAN		equ	34
+576+  2B67              BORDER_DARKYELLOW	equ	40
+577+  2B67              BORDER_GRAY		equ	42
+578+  2B67              BORDER_BLACK2		equ	128
+579+  2B67              BORDER_BLUE		equ	130
+580+  2B67              BORDER_RED		equ	138
+581+  2B67              BORDER_MAGENTA		equ	138
+582+  2B67              BORDER_GREEN		equ	160
+583+  2B67              BORDER_CYAN		equ	162
+584+  2B67              BORDER_YELLOW		equ	168
+585+  2B67              BORDER_WHITE		equ	170
+586+  2B67                      ;}
+587+  2B67
+588+  2B67
+589+  2B67                      ;{	Character map
+590+  2B67              CHAR_HEIGHT		equ	7
+591+  2B67
+592+  2B67 28           CharacterCnt		db	40
+593+  2B68 02           CharacterWidth		db	2
+594+  2B69 05           CharacterHeight		db	5
+595+  2B6A              CharacterTable
+596+  2B6A FF AA AA AA  Char_0			db	255,170,170,170,170,170,170,170,255,170
+596+  2B6E AA AA AA AA
+596+  2B72 FF AA
+597+  2B74 55 00 FF 00  Char_1			db	85,0,255,0,85,0,85,0,255,170
+597+  2B78 55 00 55 00
+597+  2B7C FF AA
+598+  2B7E FF AA 00 AA  Char_2			db	255,170,0,170,255,170,170,0,255,170
+598+  2B82 FF AA AA 00
+598+  2B86 FF AA
+599+  2B88 FF AA 00 AA  Char_3			db	255,170,0,170,85,170,0,170,255,170
+599+  2B8C 55 AA 00 AA
+599+  2B90 FF AA
+600+  2B92 AA AA AA AA  Char_4			db	170,170,170,170,255,170,0,170,0,170
+600+  2B96 FF AA 00 AA
+600+  2B9A 00 AA
+601+  2B9C FF AA AA 00  Char_5			db	255,170,170,0,255,170,0,170,255,170
+601+  2BA0 FF AA 00 AA
+601+  2BA4 FF AA
+602+  2BA6 FF AA AA 00  Char_6			db	255,170,170,0,255,170,170,170,255,170
+602+  2BAA FF AA AA AA
+602+  2BAE FF AA
+603+  2BB0 FF AA AA AA  Char_7			db	255,170,170,170,0,170,0,170,0,170
+603+  2BB4 00 AA 00 AA
+603+  2BB8 00 AA
+604+  2BBA FF AA AA AA  Char_8			db	255,170,170,170,255,170,170,170,255,170
+604+  2BBE FF AA AA AA
+604+  2BC2 FF AA
+605+  2BC4 FF AA AA AA  Char_9			db	255,170,170,170,255,170,0,170,255,170
+605+  2BC8 FF AA 00 AA
+605+  2BCC FF AA
+606+  2BCE FF AA AA AA  Char_A			db	255,170,170,170,255,170,170,170,170,170
+606+  2BD2 FF AA AA AA
+606+  2BD6 AA AA
+607+  2BD8 FF AA AA AA  Char_B			db	255,170,170,170,255,0,170,170,255,170
+607+  2BDC FF 00 AA AA
+607+  2BE0 FF AA
+608+  2BE2 FF AA AA AA  Char_C			db	255,170,170,170,170,0,170,170,255,170
+608+  2BE6 AA 00 AA AA
+608+  2BEA FF AA
+609+  2BEC FF 00 AA AA  Char_D			db	255,0,170,170,170,170,170,170,255,170
+609+  2BF0 AA AA AA AA
+609+  2BF4 FF AA
+610+  2BF6 FF AA AA 00  Char_E			db	255,170,170,0,255,0,170,0,255,170
+610+  2BFA FF 00 AA 00
+610+  2BFE FF AA
+611+  2C00 FF AA AA 00  Char_F			db	255,170,170,0,255,0,170,0,170,0
+611+  2C04 FF 00 AA 00
+611+  2C08 AA 00
+612+  2C0A FF AA AA 00  Char_G			db	255,170,170,0,170,170,170,170,255,170
+612+  2C0E AA AA AA AA
+612+  2C12 FF AA
+613+  2C14 AA AA AA AA  Char_H			db	170,170,170,170,255,170,170,170,170,170
+613+  2C18 FF AA AA AA
+613+  2C1C AA AA
+614+  2C1E FF AA 55 00  Char_I			db	255,170,85,0,85,0,85,0,255,170
+614+  2C22 55 00 55 00
+614+  2C26 FF AA
+615+  2C28 FF AA 00 AA  Char_J			db	255,170,0,170,0,170,170,170,255,0
+615+  2C2C 00 AA AA AA
+615+  2C30 FF 00
+616+  2C32 AA AA AA AA  Char_K			db	170,170,170,170,255,0,170,170,170,170
+616+  2C36 FF 00 AA AA
+616+  2C3A AA AA
+617+  2C3C AA 00 AA 00  Char_L			db	170,0,170,0,170,0,170,0,255,170
+617+  2C40 AA 00 AA 00
+617+  2C44 FF AA
+618+  2C46 AA AA FF AA  Char_M			db	170,170,255,170,170,170,170,170,170,170
+618+  2C4A AA AA AA AA
+618+  2C4E AA AA
+619+  2C50 FF AA AA AA  Char_N			db	255,170,170,170,170,170,170,170,170,170
+619+  2C54 AA AA AA AA
+619+  2C58 AA AA
+620+  2C5A FF AA AA AA  Char_O			db	255,170,170,170,170,170,170,170,255,170
+620+  2C5E AA AA AA AA
+620+  2C62 FF AA
+621+  2C64 FF AA AA AA  Char_P			db	255,170,170,170,170,170,255,170,170,0
+621+  2C68 AA AA FF AA
+621+  2C6C AA 00
+622+  2C6E FF AA AA AA  Char_Q			db	255,170,170,170,170,170,255,170,0,170
+622+  2C72 AA AA FF AA
+622+  2C76 00 AA
+623+  2C78 FF AA AA AA  Char_R			db	255,170,170,170,170,170,255,0,170,170
+623+  2C7C AA AA FF 00
+623+  2C80 AA AA
+624+  2C82 FF AA AA 00  Char_S			db	255,170,170,0,255,170,0,170,255,170
+624+  2C86 FF AA 00 AA
+624+  2C8A FF AA
+625+  2C8C FF AA 55 00  Char_T			db	255,170,85,0,85,0,85,0,85,0
+625+  2C90 55 00 55 00
+625+  2C94 55 00
+626+  2C96 AA AA AA AA  Char_U			db	170,170,170,170,170,170,170,170,255,170
+626+  2C9A AA AA AA AA
+626+  2C9E FF AA
+627+  2CA0 AA AA AA AA  Char_V			db	170,170,170,170,170,170,170,170,255,0
+627+  2CA4 AA AA AA AA
+627+  2CA8 FF 00
+628+  2CAA AA AA AA AA  Char_W			db	170,170,170,170,170,170,255,170,170,170
+628+  2CAE AA AA FF AA
+628+  2CB2 AA AA
+629+  2CB4 AA AA AA AA  Char_X			db	170,170,170,170,85,0,170,170,170,170
+629+  2CB8 55 00 AA AA
+629+  2CBC AA AA
+630+  2CBE AA AA AA AA  Char_Y			db	170,170,170,170,255,170,85,0,85,0
+630+  2CC2 FF AA 55 00
+630+  2CC6 55 00
+631+  2CC8 FF AA 00 AA  Char_Z			db	255,170,0,170,255,170,170,0,255,170
+631+  2CCC FF AA AA 00
+631+  2CD0 FF AA
+632+  2CD2 FF AA FF AA  Char_Squere		db	255,170,255,170,255,170,255,170,255,170
+632+  2CD6 FF AA FF AA
+632+  2CDA FF AA
+633+  2CDC 00 00 00 00  Char_Space		db	0,0,0,0,0,0,0,0,0,0
+633+  2CE0 00 00 00 00
+633+  2CE4 00 00
+634+  2CE6 00 00 55 00  Char_Plus		db	0,0,85,0,255,170,85,0,0,0
+634+  2CEA FF AA 55 00
+634+  2CEE 00 00
+635+  2CF0 00 00 00 00  Char_Dot		db	0,0,0,0,0,0,0,0,85,0
+635+  2CF4 00 00 00 00
+635+  2CF8 55 00
+636+  2CFA 00 00 55 00  Char_Comma		db	0,0,85,0,170,170,85,0,0,0
+636+  2CFE AA AA 55 00
+636+  2D02 00 00
+637+  2D04              ;Char_Comma		db	0,0,0,0,0,0,85,0,170,0
+638+  2D04 00 00 00 AA  Char_Slash		db	0,0,0,170,85,0,170,0,0,0
+638+  2D08 55 00 AA 00
+638+  2D0C 00 00
+639+  2D0E 00 00 55 00  Char_DotDot		db	0,0,85,0,0,0,85,0,0,0
+639+  2D12 00 00 55 00
+639+  2D16 00 00
+640+  2D18 AA 00 FF 00  Char_Arrow		db	170,0,255,0,255,170,255,0,170,0
+640+  2D1C FF AA FF 00
+640+  2D20 AA 00
+641+  2D22 55 00 55 00  Char_Exclamation        db	85,0,85,0,85,0,0,0,85,0
+641+  2D26 55 00 00 00
+641+  2D2A 55 00
+642+  2D2C 00 00 00 00  Char_Minus              db      0,0,0,0,255,0,0,0,0,0
+642+  2D30 FF 00 00 00
+642+  2D34 00 00
+643+  2D36              ;}
+644+  2D36
+645+  2D36
+# file closed: chars.a80
+945   2D36                      include "tvcfunctions.a80"
+# file opened: tvcfunctions.a80
+  1+  2D36                      ; **************************************
+  2+  2D36                      ; * Video mode configuration functions *
+  3+  2D36                      ; **************************************
+  4+  2D36
+  5+  2D36                      ;---------------------------------------------------------------------
+  6+  2D36                      ; Copies TVC program file from Cart ROM to RAM
+  7+  2D36                      ; Input:  HL - ROM address
+  8+  2D36                      ;         DE - RAM address
+  9+  2D36                      ;         BC - Number of bytes to copy
+ 10+  2D36                      ; Output: HL - last byte address of ROM file
+ 11+  2D36                      ;         DE - last address of the RAM
+ 12+  2D36                      ; Destroys: HL, BC, DE, A, F
+ 13+  2D36
+ 14+  2D36              SetPaging_U0_U1_VID_SYS:
+ 15+  2D36 3E 50                ld	a, P_U0_U1_VID_SYS      ; Page in video memory to page 2.: U1, U2, VID, SYS
+ 16+  2D38 C3 4A 2D             jp      SetPaging
+ 17+  2D3B
+ 18+  2D3B              SetPaging_U0_U1_U2_SYS:
+ 19+  2D3B 3E 70                ld	a, P_U0_U1_U2_SYS	; Set paging to U0, U1, U2, SYS
+ 20+  2D3D C3 4A 2D             jp      SetPaging
+ 21+  2D40
+ 22+  2D40              SetPaging_U0_U1_U2_U3:
+ 23+  2D40 3E B0                ld	a, P_U0_U1_U2_U3        ; Set paging to U0, U1, U2, U3
+ 24+  2D42 C3 4A 2D             jp      SetPaging
+ 25+  2D45
+ 26+  2D45              SetPaging_U0_U1_VID_U3:
+ 27+  2D45 3E 90                ld	A,P_U0_U1_VID_U3
+ 28+  2D47 C3 4A 2D             jp      SetPaging
+ 29+  2D4A
+ 30+  2D4A              SetPaging:
+ 31+  2D4A 32 03 00     	ld	(P_SAVE), a
+ 32+  2D4D D3 02        	out	(PAGE_REG), a
+ 33+  2D4F C9                   ret
+ 34+  2D50
+ 35+  2D50                      ;---------------------------------------------------------------------
+ 36+  2D50                      ; Changes the value of a BASIC string variable
+ 37+  2D50                      ; Input:  HL - New string value (zero terminated)
+ 38+  2D50                      ;         DE - Name of the variable
+ 39+  2D50                      ;          C - Length of the variable name
+ 40+  2D50              LetStringVariable:
+ 41+  2D50 E5                   push    hl                      ; push string pointer
+ 42+  2D51 2A 24 17             ld      hl,(CHAIN)              ; load symbol area address
+ 43+  2D54
+ 44+  2D54              SerachForSymbol:
+ 45+  2D54 E5                   push    hl                      ; save current symbol address
+ 46+  2D55 23                   inc     hl                      ; skip next symbol address
+ 47+  2D56 23                   inc     hl
+ 48+  2D57 7E                   ld      a, (hl)                 ; load symbol name length
+ 49+  2D58 B9                   cp      a, c                    ; compare with length of the symbol to search
+ 50+  2D59 20 2B                jr      nz, NextSymbol         ; Length are different -> next symbol
+ 51+  2D5B D5                   push    de                      ; save symbol name pointer
+ 52+  2D5C
+ 53+  2D5C                      ; compare symbol name
+ 54+  2D5C 47                   ld      b, a
+ 55+  2D5D 23                   inc     hl                      ; skip symbol length
+ 56+  2D5E
+ 57+  2D5E              CompareSymbol:
+ 58+  2D5E 1A                   ld      a, (de)
+ 59+  2D5F BE                   cp      (hl)
+ 60+  2D60 20 20                jr      nz, SymbolNameDifferent
+ 61+  2D62 23                   inc     hl
+ 62+  2D63 13                   inc     de
+ 63+  2D64 10 F8                djnz    CompareSymbol
+ 64+  2D66
+ 65+  2D66                      ; symbol name found
+ 66+  2D66 7E                   ld      a, (hl)                  ; load symbol type
+ 67+  2D67 FE 00                cp      a, 0
+ 68+  2D69 20 17                jr      nz, WrongSymbolType
+ 69+  2D6B
+ 70+  2D6B                      ; copy value string
+ 71+  2D6B 23                   inc     hl                      ; skip type
+ 72+  2D6C 23                   inc     hl                      ; skip allocated length
+ 73+  2D6D EB                   ex      hl, de                  ; move destination to de
+ 74+  2D6E E1                   pop     hl
+ 75+  2D6F E1                   pop     hl
+ 76+  2D70 E1                   pop     hl                      ; reload string pointer
+ 77+  2D71
+ 78+  2D71 D5                   push    de                      ; store length position
+ 79+  2D72 13                   inc     de                      ; first character position
+ 80+  2D73 06 00                ld      b, 0                    ; string length
+ 81+  2D75
+ 82+  2D75              CopyNextCharacter:
+ 83+  2D75 7E                   ld      a, (hl)                 ; load character
+ 84+  2D76 B7                   or      a
+ 85+  2D77 28 06                jr      z, StringEnd
+ 86+  2D79 12                   ld      (de), a
+ 87+  2D7A 23                   inc     hl
+ 88+  2D7B 13                   inc     de
+ 89+  2D7C 04                   inc     b
+ 90+  2D7D 18 F6                jr      CopyNextCharacter
+ 91+  2D7F
+ 92+  2D7F              StringEnd:
+ 93+  2D7F E1                   pop     hl
+ 94+  2D80 70                   ld      (hl),  b                ; store length
+ 95+  2D81
+ 96+  2D81 C9                   ret
+ 97+  2D82
+ 98+  2D82              WrongSymbolType:
+ 99+  2D82              SymbolNameDifferent:
+100+  2D82 D1                   pop     de                      ; reload symbol name pointer
+101+  2D83 E1                   pop     hl                      ; reload current address pointer
+102+  2D84 E1                   pop     hl                      ; reload string pointer
+103+  2D85
+104+  2D85 C9                   ret
+105+  2D86
+106+  2D86              NextSymbol:
+107+  2D86 E1                   pop     hl                      ; reload current symbol address
+108+  2D87 7E                   ld      a, (hl)                 ; load next symbol address
+109+  2D88 23                   inc     hl
+110+  2D89 66                   ld      h, (hl)
+111+  2D8A 6F                   ld      l, a
+112+  2D8B 7C                   ld      a, h
+113+  2D8C FE C0                cp      a, $c0
+114+  2D8E 38 C4                jr      c, SerachForSymbol
+115+  2D90
+116+  2D90                      ; symbol not found -> do nothing
+117+  2D90 E1                   pop     hl                      ; reload string pointer
+118+  2D91 C9                   ret
+119+  2D92
+120+  2D92                      ;---------------------------------------------------------------------
+121+  2D92                      ; Draws a horizontal line
+122+  2D92                      ; Input:  B - X
+123+  2D92                      ;         C - Y
+124+  2D92                      ;         A - Length
+125+  2D92              DrawHorizontalLine:
+126+  2D92 CD A2 2A             call    PosToVidmemAddress
+127+  2D95
+128+  2D95 47                   ld      b, a
+129+  2D96 3A 39 2A             ld      a, (CharBackgroundSave1+1)
+130+  2D99
+131+  2D99              DrawHorizontalLineL1:
+132+  2D99 77                   ld      (hl), a
+133+  2D9A 23                   inc     hl
+134+  2D9B 10 FC                djnz    DrawHorizontalLineL1
+135+  2D9D
+136+  2D9D C9                   ret
+137+  2D9E
+138+  2D9E                      ; **************************************
+139+  2D9E                      ; * ZX7 decompression                  *
+140+  2D9E                      ; **************************************
+141+  2D9E
+142+  2D9E                      ; -----------------------------------------------------------------------------
+143+  2D9E                      ; ZX7 decoder by Einar Saukas & Urusergi
+144+  2D9E                      ; "Turbo" version (88 bytes, 25% faster)
+145+  2D9E                      ; -----------------------------------------------------------------------------
+146+  2D9E                      ; Parameters:
+147+  2D9E                      ;   HL: source address (compressed data)
+148+  2D9E                      ;   DE: destination address (decompressing)
+149+  2D9E                      ; -----------------------------------------------------------------------------
+150+  2D9E              dzx7_turbo:
+151+  2D9E 3E 80                ld	a,$80
+152+  2DA0
+153+  2DA0              dzx7t_copy_byte_loop:
+154+  2DA0 ED A0                ldi				; copy literal byte
+155+  2DA2
+156+  2DA2              dzx7t_main_loop:
+157+  2DA2 87                   add	a,a			; check next bit
+158+  2DA3 CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+159+  2DA6 30 F8                jr	nc,dzx7t_copy_byte_loop	; next bit indicates either literal or sequence
+160+  2DA8
+161+  2DA8                      ; determine number of bits used for length (Elias gamma coding)
+162+  2DA8 D5                   push	de
+163+  2DA9 01 01 00             ld	bc,1
+164+  2DAC 50                   ld	d,b
+165+  2DAD
+166+  2DAD              dzx7t_len_size_loop:
+167+  2DAD 14                   inc	d
+168+  2DAE 87                   add	a,a			; check next bit
+169+  2DAF CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+170+  2DB2 30 F9                jr	nc,dzx7t_len_size_loop
+171+  2DB4 C3 C1 2D             jp	dzx7t_len_value_START
+172+  2DB7
+173+  2DB7                      ; determine length
+174+  2DB7              dzx7t_len_value_loop:
+175+  2DB7 87                   add	a,a			; check next bit
+176+  2DB8 CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+177+  2DBB CB 11                rl	c
+178+  2DBD CB 10                rl	b
+179+  2DBF 38 2D                jr	c,dzx7t_exit		; check end marker
+180+  2DC1
+181+  2DC1              dzx7t_len_value_START:
+182+  2DC1 15                   dec	d
+183+  2DC2 20 F3                jr	nz,dzx7t_len_value_loop
+184+  2DC4 03                   inc	bc			; adjust length
+185+  2DC5
+186+  2DC5                      ; determine offset
+187+  2DC5 5E                   ld	e,(hl)			; load offset flag (1 bit) + offset value (7 bits)
+188+  2DC6 23                   inc	hl
+189+  2DC7 CB 33                sll	e			; opcode for undocumented instruction "SLL E" aka "SLS E"
+190+  2DC9 30 1A                jr	nc,dzx7t_offset_end	; if offset flag is set, load 4 extra bits
+191+  2DCB 87                   add	a,a			; check next bit
+192+  2DCC CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+193+  2DCF CB 12                rl	d			; insert first bit into D
+194+  2DD1 87                   add	a,a			; check next bit
+195+  2DD2 CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+196+  2DD5 CB 12                rl	d			; insert second bit into D
+197+  2DD7 87                   add	a,a			; check next bit
+198+  2DD8 CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+199+  2DDB CB 12                rl	d			; insert third bit into D
+200+  2DDD 87                   add	a,a			; check next bit
+201+  2DDE CC F2 2D             call	z,dzx7t_load_bits	; no more bits left?
+202+  2DE1 3F                   ccf
+203+  2DE2 38 01                jr	c,dzx7t_offset_end
+204+  2DE4 14                   inc	d			; equivalent to adding 128 to DE
+205+  2DE5
+206+  2DE5              dzx7t_offset_end:
+207+  2DE5 CB 1B                rr	e			; insert inverted fourth bit into E
+208+  2DE7
+209+  2DE7                      ; copy previous sequence
+210+  2DE7 E3                   ex	(sp),hl			; store source, restore destination
+211+  2DE8 E5                   push	hl			; store destination
+212+  2DE9 ED 52                sbc	hl,de			; HL = destination - offset - 1
+213+  2DEB D1                   pop	de			; DE = destination
+214+  2DEC ED B0                ldir
+215+  2DEE              dzx7t_exit:
+216+  2DEE E1                   pop	hl			; restore source address (compressed data)
+217+  2DEF D2 A2 2D             jp	nc,dzx7t_main_loop
+218+  2DF2
+219+  2DF2              dzx7t_load_bits:
+220+  2DF2 7E                   ld	a,(hl)			; load another group of 8 bits
+221+  2DF3 23                   inc	hl
+222+  2DF4 17                   rla
+223+  2DF5 C9                   ret
+224+  2DF6
+225+  2DF6 00           SAVED_MEM_PAGES  db     0
+226+  2DF7 00           SAVED_GRAPH_MODE db     0
+227+  2DF8
+228+  2DF8                      ;---------------------------------------------------------------------
+229+  2DF8                      ; Copy file name from zero terminated string to TVC format (length+string)
+230+  2DF8                      ; Input:  HL - Source address of the zero terminated string
+231+  2DF8                      ;         DE - Destination address of the file name
+232+  2DF8              CopyFileName:
+233+  2DF8 D5                   push    de
+234+  2DF9 13                   inc     de
+235+  2DFA 06 00                ld      b, 0
+236+  2DFC
+237+  2DFC              LCopyFileNameLoop:
+238+  2DFC 7E                   ld      a, (hl)                 ; check terminating zero
+239+  2DFD B7                   or      a
+240+  2DFE 28 09                jr      z, LCopyFileNameExit
+241+  2E00
+242+  2E00 12                   ld      (de), a                 ; copy file name chacter
+243+  2E01 23                   inc     hl
+244+  2E02 13                   inc     de
+245+  2E03
+246+  2E03 04                   inc     b                       ; update and check file name length
+247+  2E04 78                   ld      a, b
+248+  2E05 FE 0C                cp      a, FILE_NAME_LENGTH
+249+  2E07 38 F3                jr      c, LCopyFileNameLoop
+250+  2E09
+251+  2E09              LCopyFileNameExit
+252+  2E09 E1                   pop     hl                      ; store file name length
+253+  2E0A 70                   ld      (hl), b
+254+  2E0B
+255+  2E0B C9                   ret
+256+  2E0C
+257+  2E0C                      ;---------------------------------------------------------------------
+258+  2E0C                      ; Append extension to the file name
+259+  2E0C                      ; Input:  HL - Source address of the zero terminated extension string
+260+  2E0C                      ;         DE - Address of the file name buffer
+261+  2E0C              AppendFileNameExtension:
+262+  2E0C D5                   push    de
+263+  2E0D EB                   ex      hl,de
+264+  2E0E 4E                   ld      c, (hl)                 ; get current file name length
+265+  2E0F 06 00                ld      b, 0
+266+  2E11 23                   inc     hl
+267+  2E12 09                   add     hl, bc
+268+  2E13 EB                   ex      hl, de
+269+  2E14
+270+  2E14              LAppendFileNameExtensionLoop:
+271+  2E14 7E                   ld      a, (hl)
+272+  2E15 B7                   or      a
+273+  2E16 28 09                jr      z, LAppendFileNameExtensionExit
+274+  2E18
+275+  2E18 12                   ld      (de), a
+276+  2E19 23                   inc     hl
+277+  2E1A 13                   inc     de
+278+  2E1B 0C                   inc     c
+279+  2E1C 79                   ld      a, c
+280+  2E1D FE 0C                cp      a, FILE_NAME_LENGTH
+281+  2E1F 38 F3                jr      c, LAppendFileNameExtensionLoop
+282+  2E21
+283+  2E21              LAppendFileNameExtensionExit:
+284+  2E21 E1                   pop     hl
+285+  2E22 71                   ld      (hl), c
+286+  2E23
+287+  2E23 C9                   ret
+288+  2E24
+289+  2E24                      ;---------------------------------------------------------------------
+290+  2E24                      ; Loads a binary file from the file system
+291+  2E24                      ; Input:  HL - Destination address of the file
+292+  2E24                      ;         DE - Name of the file
+293+  2E24                      ; Output: A - Error code, 0 = no error
+294+  2E24                      ;         HL - Length of the file
+295+  2E24              LoadBinaryFile:
+296+  2E24 22 4D 2E             ld      (SAVED_DESTINATION_ADDRESS), hl         ; save destination address
+297+  2E27
+298+  2E27 F7                   rst     30h                                     ; open file
+299+  2E28 D3                   db      CAS_FN_OPEN
+300+  2E29
+301+  2E29 B7                   or      a                                       ; return if error occured
+302+  2E2A C0                   ret     nz
+303+  2E2B
+304+  2E2B F7                   rst     30h                                     ; load file length low byte
+305+  2E2C D1                   db      CAS_FN_CHIN
+306+  2E2D
+307+  2E2D B7                   or      a
+308+  2E2E C0                   ret     nz
+309+  2E2F
+310+  2E2F 79                   ld      a, c
+311+  2E30 32 4F 2E             ld      (SAVED_FILE_LENGTH), a
+312+  2E33
+313+  2E33 F7                   rst     30h                                     ; load file length high byte
+314+  2E34 D1                   db      CAS_FN_CHIN
+315+  2E35
+316+  2E35 B7                   or      a
+317+  2E36 C0                   ret     nz
+318+  2E37
+319+  2E37 79                   ld      a, c
+320+  2E38 32 50 2E             ld      (SAVED_FILE_LENGTH+1), a
+321+  2E3B
+322+  2E3B ED 4B 4F 2E          ld      bc, (SAVED_FILE_LENGTH)                 ; load binary file
+323+  2E3F ED 5B 4D 2E          ld      de, (SAVED_DESTINATION_ADDRESS)
+324+  2E43 F7                   rst     30h
+325+  2E44 D2                   db      CAS_FN_BKIN
+326+  2E45
+327+  2E45 B7                   or      a
+328+  2E46 C0                   ret     nz
+329+  2E47
+330+  2E47 F7                   rst     30h                                     ; close file
+331+  2E48 D4                   db      CAS_FN_CLOSE_RD
+332+  2E49
+333+  2E49 2A 4F 2E             ld      hl, (SAVED_FILE_LENGTH)
+334+  2E4C
+335+  2E4C C9                   ret
+336+  2E4D
+337+  2E4D 00 00        SAVED_DESTINATION_ADDRESS        dw      0               ; destination address save for load binary file function
+338+  2E4F 00 00        SAVED_FILE_LENGTH                dw      0               ; saved binary file length
+339+  2E51
+# file closed: tvcfunctions.a80
+946   2E51                      include "gamesinfo.a80"
+# file opened: gamesinfo.a80
+  1+  2E51                      struct GamesCollection
+  2+  2E51 ~            Index           byte 0
+  3+  2E51 ~            Year            text 7, {0}
+  4+  2E51 ~            YearDec         dw 0
+  5+  2E51 ~            File            text 9, {0}
+  6+  2E51                      ends
+  7+  2E51
+  8+  2E51              GAMES_COLLECTION_COUNT:
+  9+  2E51 04                   db      (GAMES_COLLECTION_END - GAMES_COLLECTION) / GamesCollection
+ 10+  2E52
+ 11+  2E52              GAMES_COLLECTION:
+ 12+  2E52                      GamesCollection {
+ 13+  2E52 00                   0
+ 14+  2E53 32 30 32 32          { "2022"}
+ 14+  2E57 00 00 00
+ 15+  2E5A 99 08                2201
+ 16+  2E5C 52 45 53 32          { "RES2022" }
+ 16+  2E60 30 32 32 00
+ 16+  2E64 00
+ 17+  2E65                      }
+ 18+  2E65
+ 19+  2E65                      GamesCollection {
+ 20+  2E65 00                   0
+ 21+  2E66 32 30 32 31          { "2021"}
+ 21+  2E6A 00 00 00
+ 22+  2E6D 35 08                2101
+ 23+  2E6F 52 45 53 32          { "RES2021" }
+ 23+  2E73 30 32 31 00
+ 23+  2E77 00
+ 24+  2E78                      }
+ 25+  2E78
+ 26+  2E78                      if      LOADERTYPE != LOADER_FILE
+ 27+  2E78                      GamesCollection {
+ 28+  2E78 00                   0
+ 29+  2E79 32 30 32 30          { "2020"}
+ 29+  2E7D 00 00 00
+ 30+  2E80 D1 07                2001
+ 31+  2E82 52 45 53 32          { "RES2020" }
+ 31+  2E86 30 32 30 00
+ 31+  2E8A 00
+ 32+  2E8B                      }
+ 33+  2E8B
+ 34+  2E8B                      GamesCollection {
+ 35+  2E8B 00                   0
+ 36+  2E8C 32 30 31 39          { "2019"}
+ 36+  2E90 00 00 00
+ 37+  2E93 6D 07                1901
+ 38+  2E95 52 45 53 32          { "RES2019" }
+ 38+  2E99 30 31 39 00
+ 38+  2E9D 00
+ 39+  2E9E                      }
+ 40+  2E9E                      endif
+ 41+  2E9E
+ 42+  2E9E              GAMES_COLLECTION_END
+ 43+  2E9E
+# file closed: gamesinfo.a80
+947   2E9E                      include "psgplayer.a80"
+# file opened: psgplayer.a80
+  1+  2E9E                      ;---------------------------------------------------------------------
+  2+  2E9E                      ; TVComputer PSG music file player routine
+  3+  2E9E                      ; (c) 2023 Laszlo Arvai
+  4+  2E9E                      ; How to use this library:
+  5+  2E9E                      ; 1. Call 'DetectSndCard'
+  6+  2E9E                      ; 2. Call 'InitMusicPlayer'
+  7+  2E9E                      ; 3. Initialize interrupt system and prepare to call 'MusicPlayer_IT' from the interrupt handler
+  8+  2E9E                      ; 4. Load PSG file to the memory and store starting address of the memory in the 'PSGFile' variable
+  9+  2E9E                      ; 5. Call 'StartMusic' routine for staring music playing
+ 10+  2E9E                      ; 6. Enjoy music :-)
+ 11+  2E9E                      ; 7. Call 'StopMusic' routine for turning off the sound
+ 12+  2E9E                      ; 8. Remove interrupt handler
+ 13+  2E9E                      ;---------------------------------------------------------------------
+ 14+  2E9E
+ 15+  2E9E                      ;------------------------------------------------------------------------------
+ 16+  2E9E                      ; PSG simplistic approach(log of writes to SN76489 port)
+ 17+  2E9E                      ;------------------------------------------------------------------------------
+ 18+  2E9E                      ; - No header
+ 19+  2E9E                      ; - % 1cct xxxx = Latch / Data byte for SN76489 channel c, type t, data xxxx(4 bits)
+ 20+  2E9E                      ; - % 01xx xxxx = Data byte for SN76489 latched channel and type, data xxxxxx(6 bits)
+ 21+  2E9E                      ; - % 00xx xxxx = escape / control byte(values 0x00 - 0x3f), see following table #1
+ 22+  2E9E                      ;
+ 23+  2E9E                      ; Table #1
+ 24+  2E9E                      ;
+ 25+  2E9E                      ; % 0000 0000 - end of data[value 0x00](compulsory, at the end of file)
+ 26+  2E9E                      ;
+ 27+  2E9E                      ; % 0000 0001 - loop begin marker[value 0x01](optional, songs with no loop won't have this)
+ 28+  2E9E                      ;
+ 29+  2E9E                      ;	% 0000 0nnn - RESERVED for future expansions[values 0x02 - 0x07]
+ 30+  2E9E                      ;	* PLANNED: GameGear stereo - the following byte sets the stereo configuration
+ 31+  2E9E                      ;	* PLANNED : event callback - the following byte will be passed to the callback function
+ 32+  2E9E                      ;	* PLANNED : longer waits(8 - 255) - the following byte gives the additional frames
+ 33+  2E9E                      ;	* PLANNED : compression for longer substrings(52 - 255) - followed by a byte that gives the length
+ 34+  2E9E                      ;	and a word that gives the offset
+ 35+  2E9E                      ;
+ 36+  2E9E                      ;	%0000 1xxx - COMPRESSION: repeat block of len 4 - 11 bytes
+ 37+  2E9E                      ;	%0001 xxxx - COMPRESSION: repeat block of len 12 - 27 bytes
+ 38+  2E9E                      ;	%0010 xxxx - COMPRESSION: repeat block of len 28 - 43
+ 39+  2E9E                      ;	%0011 0xxx - COMPRESSION: repeat block of len 44 - 51 [values 0x08 - 0x37]
+ 40+  2E9E                      ;	This is followed by a little - endian word which is the offset(from begin of data) of the repeating block
+ 41+  2E9E                      ;
+ 42+  2E9E                      ;	% 0011 1nnn - end of frame, wait nnn additional frames(0 - 7)[values 0x38 - 0x3f]
+ 43+  2E9E                      ;------------------------------------------------------------------------------
+ 44+  2E9E
+ 45+  2E9E
+ 46+  2E9E                      ; configuration defines
+ 47+  2E9E              PSGFastFreqCalculation  equ     1       ; frequency calculation mode (0 - accurate but slow, 1 - fast and less accurate)
+ 48+  2E9E
+ 49+  2E9E                      ; Sound card defines
+ 50+  2E9E              SndCardNone             equ     0       ; No sound card detected
+ 51+  2E9E              SndCardGame             equ     1       ; Game card
+ 52+  2E9E              SndCardSndMx            equ     2       ; Sound Magix card
+ 53+  2E9E
+ 54+  2E9E              GameCardControlPort     equ     $0f     ; Control port address on game card
+ 55+  2E9E              GameCardClockEnable     equ     8+7     ; Clock enable signal on game card
+ 56+  2E9E              GameCardClockDisable    equ     7       ; Clock disable signal on game card
+ 57+  2E9E              SndChannelCount         equ     4       ; Number of channels on SN chip
+ 58+  2E9E
+ 59+  2E9E                      ; PSG command defines
+ 60+  2E9E              PSGLatch                equ     $80
+ 61+  2E9E              PSGData                 equ     $40
+ 62+  2E9E              PSGNoiseRegister        equ     $e0
+ 63+  2E9E              PSGChannelMask          equ     %01100000
+ 64+  2E9E
+ 65+  2E9E              PSGWait                 equ     $38
+ 66+  2E9E              PSGSubString            equ     $08
+ 67+  2E9E              PSGLoop                 equ     $01
+ 68+  2E9E              PSGEnd                  equ     $00
+ 69+  2E9E
+ 70+  2E9E                      ; SN76489 register address
+ 71+  2E9E              FreqWriteChannel0       equ     $80
+ 72+  2E9E              FreqWriteChannel1       equ     $a0
+ 73+  2E9E              FreqWriteChannel2       equ     $c0
+ 74+  2E9E
+ 75+  2E9E                      ; Sound card variables
+ 76+  2E9E 00           SndCardBaseAddr		db	0       ; Sound card base address
+ 77+  2E9F 00           SndCardType		db	0       ; Type if the sound card
+ 78+  2EA0
+ 79+  2EA0 06 4A 4F 59  DetectGameStr		db	6,'JOY+SN'
+ 79+  2EA4 2B 53 4E
+ 80+  2EA7 05 53 6E 64  DetectMultiStr		db	5,'SndMx'
+ 80+  2EAB 4D 78
+ 81+  2EAD
+ 82+  2EAD 00 00        SndCardDetectAddr	dw	0
+ 83+  2EAF
+ 84+  2EAF                      ; PSG Player variables
+ 85+  2EAF 00 00        PSGFile                 dw    0                 ; address of the PSG file in the memory
+ 86+  2EB1 00           PSGMusicStatus          db    0                 ; are we playing a background music?
+ 87+  2EB2 00 00        PSGMusicStart           dw    0                 ; the pointer to the beginning of music
+ 88+  2EB4 00 00        PSGMusicPointer         dw    0                 ; the pointer to the current
+ 89+  2EB6 00 00        PSGMusicLoopPoint       dw    0                 ; the pointer to the loop begin
+ 90+  2EB8 00           PSGMusicSkipFrames      db    0                 ; the frames we need to skip
+ 91+  2EB9
+ 92+  2EB9                      ; decompression vars
+ 93+  2EB9 00           PSGMusicSubstringLen            db      0       ; lenght of the substring we are playing
+ 94+  2EBA 00 00        PSGMusicSubstringRetAddr        dw      0       ; return to this address when substring is over
+ 95+  2EBC
+ 96+  2EBC                      if      PSGFastFreqCalculation == 0
+ 97+  2EBC ~
+ 98+  2EBC ~                    ; frequency calculation for 3.125MHz clock (The values can be calculated by x*32*3.125MHz/3.579MHz where x=[0..31])
+ 99+  2EBC ~            FreqMultiplierTable:
+100+  2EBC ~                    dw        0,  28,  56,  84, 112, 140, 168, 196
+101+  2EBC ~                    dw      224, 251, 279, 307, 335, 363, 391, 419
+102+  2EBC ~                    dw      447, 475, 503, 531, 559, 587, 615, 643
+103+  2EBC ~                    dw      671, 699, 726, 754, 782, 810, 838, 866
+104+  2EBC ~
+105+  2EBC                      endif
+106+  2EBC
+107+  2EBC 00 00        FreqRegister0   dw      0                       ; channel 0 frequency register mirror
+108+  2EBE 00 00        FreqRegister1   dw      0                       ; channel 1 frequency register mirror
+109+  2EC0 00 00        FreqRegister2   dw      0                       ; channel 2 frequency register mirror
+110+  2EC2 00           FreqRegisterChanged    db      0                ; flag for updated frequency registers (bit 0 - channel 0 updated, bit1 - channel 1 updated, bit 2 - channel 2 updated)
+111+  2EC3
+112+  2EC3 00           ChannelFreqCommand      db      0               ; latch command for writeing
+113+  2EC4 00           LastLatchCommand        db      0               ; last issued latch command
+114+  2EC5
+115+  2EC5                      ;---------------------------------------------------------------------
+116+  2EC5                      ; Detect sound card type
+117+  2EC5                      ; Determines the installed sound card (SoundMagic or Game Card) and
+118+  2EC5                      ; stores the type of the at the SndCardType variable (1, SndCardGame - Game Card; 2,SndCardSndMx - Sound Magic; 0,SndCardNone - No sound card installed)
+119+  2EC5              DetectSndCard:
+120+  2EC5 21 9F 2E             ld	hl, SndCardType                 ; Init detected card type
+121+  2EC8 36 00                ld	(hl), SndCardNone
+122+  2ECA
+123+  2ECA 11 A0 2E             ld	de, DetectGameStr               ; Detect game card
+124+  2ECD CD 12 2F             call	DetectSndCardString
+125+  2ED0
+126+  2ED0 3A 9E 2E             ld	a, (SndCardBaseAddr)            ; if detection is not success -> detect Multi Sound
+127+  2ED3 B7                   or	a
+128+  2ED4 28 13                jr	z, DetectMultiSound
+129+  2ED6
+130+  2ED6 3E 01                ld      a, SndCardGame                  ; Detection success -> store card type
+131+  2ED8 32 9F 2E             ld	(SndCardType), a
+132+  2EDB
+133+  2EDB 3A 9E 2E             ld	a, (SndCardBaseAddr)            ; enable sound chip clock on game card
+134+  2EDE C6 0F                add     a, GameCardControlPort
+135+  2EE0 4F                   ld      c, a
+136+  2EE1 3E 0F                ld      a, GameCardClockEnable
+137+  2EE3 ED 79                out     (c), a
+138+  2EE5
+139+  2EE5 CD FD 2E             call    SndInitChip
+140+  2EE8
+141+  2EE8 C9                   ret
+142+  2EE9
+143+  2EE9              DetectMultiSound
+144+  2EE9 11 A7 2E             ld	de, DetectMultiStr              ; Multi Sound string
+145+  2EEC CD 12 2F             call	DetectSndCardString             ; detect
+146+  2EEF
+147+  2EEF 3A 9E 2E             ld	a, (SndCardBaseAddr)            ; return if no card found
+148+  2EF2 B7                   or	a
+149+  2EF3 C8                   ret	z
+150+  2EF4
+151+  2EF4 3E 02                ld      a, SndCardSndMx                 ; Detection success -> store card type
+152+  2EF6 32 9F 2E             ld	(SndCardType), a
+153+  2EF9
+154+  2EF9 CD FD 2E             call    SndInitChip
+155+  2EFC
+156+  2EFC C9                   ret
+157+  2EFD
+158+  2EFD                      ;---------------------------------------------------------------------
+159+  2EFD                      ; Initialize sound chip
+160+  2EFD              SndInitChip:
+161+  2EFD 3A 9E 2E             ld	a, (SndCardBaseAddr)            ; Init card
+162+  2F00 4F                   ld	c, a
+163+  2F01 06 04                ld	b, SndChannelCount
+164+  2F03 3E 9F                ld	a, 128+16+15
+165+  2F05
+166+  2F05              SndInitChipLoop:		                ; Mute all channels
+167+  2F05 ED 79                out	(c), a
+168+  2F07
+169+  2F07 00                   nop
+170+  2F08 00                   nop
+171+  2F09 00                   nop
+172+  2F0A 00                   nop
+173+  2F0B 00                   nop
+174+  2F0C 00                   nop
+175+  2F0D C6 20                add	a, 32
+176+  2F0F 10 F4                djnz	SndInitChipLoop
+177+  2F11
+178+  2F11 C9                   ret
+179+  2F12
+180+  2F12                      ;---------------------------------------------------------------------
+181+  2F12                      ; Detect sound card type string
+182+  2F12                      ; Input:  DE - Detection string pointer
+183+  2F12              DetectSndCardString:
+184+  2F12 1A                   ld      a, (de)                         ; load name length
+185+  2F13 3C                   inc     a
+186+  2F14 47                   ld      b, a
+187+  2F15
+188+  2F15 AF                   xor	a
+189+  2F16 32 9E 2E             ld	(SndCardBaseAddr), a
+190+  2F19
+191+  2F19 21 40 00             ld	hl, $40
+192+  2F1C 22 AD 2E             ld	(SndCardDetectAddr),hl
+193+  2F1F
+194+  2F1F 0E 01                ld	c, 1			        ; 'C' is the slot number
+195+  2F21              DetectSndCardStringInnerLoop:
+196+  2F21 2A AD 2E             ld	hl, (SndCardDetectAddr)
+197+  2F24
+198+  2F24              DetectSndCardStringInnerCmp:
+199+  2F24 1A                   ld	a, (de)
+200+  2F25 BE                   cp	(hl)
+201+  2F26 20 0D                jr	nz, DetectSndCardStringNotFound
+202+  2F28 13                   inc	de
+203+  2F29 23                   inc	hl
+204+  2F2A 10 F8                djnz	DetectSndCardStringInnerCmp
+205+  2F2C
+206+  2F2C              DetectSndCardStringFound                        ; Calculate sound card base address
+207+  2F2C 79                   ld	a, c
+208+  2F2D
+209+  2F2D 87                   add	a, a
+210+  2F2E 87                   add	a, a
+211+  2F2F 87                   add	a, a
+212+  2F30 87                   add	a, a
+213+  2F31
+214+  2F31 32 9E 2E             ld	(SndCardBaseAddr), a
+215+  2F34 C9                   ret
+216+  2F35
+217+  2F35              DetectSndCardStringNotFound:
+218+  2F35 0C                   inc	c			        ; Increment slot number
+219+  2F36 79                   ld	a, c
+220+  2F37 FE 05                cp	5
+221+  2F39 C8                   ret	z			        ; If slot number is 5 -> card not found
+222+  2F3A
+223+  2F3A C5                   push	bc
+224+  2F3B 2A AD 2E             ld	hl, (SndCardDetectAddr)
+225+  2F3E 01 30 00             ld	bc, $30
+226+  2F41 09                   add	hl, bc
+227+  2F42 C1                   pop	bc
+228+  2F43 22 AD 2E             ld	(SndCardDetectAddr), hl
+229+  2F46 18 D9                jr	DetectSndCardStringInnerLoop
+230+  2F48
+231+  2F48                      ;---------------------------------------------------------------------
+232+  2F48                      ; initializes music player routine.
+233+  2F48              InitMusicPlayer:
+234+  2F48 AF                   xor a                                   ; ld a,PSG_STOPPED
+235+  2F49 32 B1 2E             ld (PSGMusicStatus),a                   ; set music status to PSG_STOPPED
+236+  2F4C
+237+  2F4C C9                   ret
+238+  2F4D
+239+  2F4D                      ;---------------------------------------------------------------------
+240+  2F4D                      ; Starts music playing
+241+  2F4D                      ; The PSGFile variable must point to the begining of the PSG file in the memory
+242+  2F4D                      ; The sound card detection must be called before and 50Hz frame interrupt
+243+  2F4D                      ; must call the MusicPlayer_IT routine
+244+  2F4D              StartMusic:
+245+  2F4D 3A 9F 2E             ld      a, (SndCardType)
+246+  2F50 FE 00                cp      a, SndCardNone
+247+  2F52 C8                   ret     z
+248+  2F53
+249+  2F53 2A AF 2E             ld      hl, (PSGFile)
+250+  2F56 22 B4 2E             ld      (PSGMusicPointer), hl
+251+  2F59 22 B2 2E             ld      (PSGMusicStart), hl
+252+  2F5C 22 B6 2E             ld      (PSGMusicLoopPoint), hl
+253+  2F5F
+254+  2F5F AF                   xor     a
+255+  2F60 32 B9 2E             ld      (PSGMusicSubstringLen), a
+256+  2F63
+257+  2F63 3E 01                ld      a, 1
+258+  2F65 32 B1 2E             ld      (PSGMusicStatus), a
+259+  2F68
+260+  2F68 C9                   ret
+261+  2F69
+262+  2F69              StopMusic:
+263+  2F69 3A 9F 2E             ld      a, (SndCardType)
+264+  2F6C FE 00                cp      a, SndCardNone
+265+  2F6E C8                   ret     z
+266+  2F6F
+267+  2F6F AF                   xor     a
+268+  2F70 32 B1 2E             ld      (PSGMusicStatus), a
+269+  2F73
+270+  2F73 CD FD 2E             call    SndInitChip
+271+  2F76
+272+  2F76 C9                   ret
+273+  2F77
+274+  2F77                      ;---------------------------------------------------------------------
+275+  2F77                      ; Interrupt handler routine
+276+  2F77                      ; Must be called from the frame (50Hz) interrupt of the TVC for the proper timing
+277+  2F77                      ; All used registers are saved
+278+  2F77              MusicPlayer_IT:
+279+  2F77 3A B1 2E             ld      a, (PSGMusicStatus)             ; check if we have got to play a tune
+280+  2F7A B7                   or      a
+281+  2F7B C8                   ret     z
+282+  2F7C
+283+  2F7C 3A B8 2E             ld      a, (PSGMusicSkipFrames)         ; check if we havve got to skip frames
+284+  2F7F B7                   or      a
+285+  2F80 C2 39 30             jp      nz, LPSGSkipFrame
+286+  2F83
+287+  2F83 AF                   xor     a
+288+  2F84 32 C2 2E             ld      (FreqRegisterChanged), a        ; reset freq changed status
+289+  2F87
+290+  2F87              LPSGFrameLoop:
+291+  2F87 2A B4 2E             ld      hl, (PSGMusicPointer)           ; read current address
+292+  2F8A 46                   ld      b, (hl)                         ; load PSG byte (in B)
+293+  2F8B 23                   inc     hl                              ; point to next byte
+294+  2F8C 22 B4 2E             ld      (PSGMusicPointer), hl           ; store pointer
+295+  2F8F
+296+  2F8F 3A B9 2E             ld      a, (PSGMusicSubstringLen)       ; read substring len
+297+  2F92 B7                   or      a
+298+  2F93 28 0C                jr      z, LPSGProcessCommand           ; check if it is 0 (we are not in a substring)
+299+  2F95 3D                   dec     a                               ; decrease len
+300+  2F96 32 B9 2E             ld      (PSGMusicSubstringLen), a       ; save len
+301+  2F99 20 06                jr      nz, LPSGProcessCommand
+302+  2F9B 2A BA 2E             ld      hl, (PSGMusicSubstringRetAddr)  ; substring is over, retrieve return address
+303+  2F9E 22 B4 2E             ld      (PSGMusicPointer), hl           ; store pointer
+304+  2FA1
+305+  2FA1              LPSGProcessCommand:
+306+  2FA1 78                   ld      a, b                            ; copy PSG byte into A
+307+  2FA2 FE 80                cp      a, PSGLatch                     ; is it a latch?
+308+  2FA4 30 05                jr      nc, LPSGSendToChip              ; if >= $80 then it is a latch
+309+  2FA6 FE 40                cp      a, PSGData                      ; check if it is a data
+310+  2FA8 DA 3E 30             jp      c, LPSGCommand                   ; if < $40 then it is a command
+311+  2FAB
+312+  2FAB              LPSGSendToChip:
+313+  2FAB 3A 9F 2E             ld      a, (SndCardType)                ; check sound card type
+314+  2FAE FE 01                cp      a, SndCardGame
+315+  2FB0 20 7E                jr      nz, NoFreqChange
+316+  2FB2
+317+  2FB2                      ; frequency recalculation is required
+318+  2FB2 78                   ld      a, b                            ; get PSG byte
+319+  2FB3 FE 80                cp      a, PSGLatch                     ; is it a latch command
+320+  2FB5 30 3E                jr      nc, FreqChangeProcessLatchCommand
+321+  2FB7
+322+  2FB7                      ; process data command with freq change
+323+  2FB7 3A C4 2E             ld      a, (LastLatchCommand)
+324+  2FBA FE E0                cp      PSGNoiseRegister
+325+  2FBC 30 72                jr      nc, NoFreqChange                ; noise register command sent directly to the chip
+326+  2FBE
+327+  2FBE CB 67                bit     4, a                            ; check for tone register
+328+  2FC0 20 6E                jr      nz, NoFreqChange                ; amplitide register is sent directly
+329+  2FC2
+330+  2FC2 E6 60                and     a, PSGChannelMask               ; determine channel
+331+  2FC4
+332+  2FC4 FE 00                cp      a, $00                          ; channel 0
+333+  2FC6 20 1B                jr      nz, FreqChangeChannel1High
+334+  2FC8
+335+  2FC8 21 BC 2E             ld      hl, FreqRegister0               ; update channel 0 register
+336+  2FCB 0E 01                ld      c, $01
+337+  2FCD
+338+  2FCD                      ; stores new frequency register value (upper 6 bits)
+339+  2FCD                      ; the new value will be sent to the chip when all PSG data of this frame is processed
+340+  2FCD              UpdateFrequencyRegisterHigh:
+341+  2FCD EB                   ex      hl, de
+342+  2FCE 78                   ld      a, b
+343+  2FCF E6 3F                and     $3f                             ; keep only the lowest 6 bits
+344+  2FD1 6F                   ld      l, a                            ; shift left by 4 bits
+345+  2FD2 26 00                ld      h, 0
+346+  2FD4 29                   add     hl, hl
+347+  2FD5 29                   add     hl, hl
+348+  2FD6 29                   add     hl, hl
+349+  2FD7 29                   add     hl, hl
+350+  2FD8
+351+  2FD8 EB                   ex      hl, de                          ; insert into the frequency register mirror pointed by HL
+352+  2FD9 7E                   ld      a, (hl)
+353+  2FDA E6 0F                and     a, $0f
+354+  2FDC B3                   or      a, e
+355+  2FDD 77                   ld      (hl), a
+356+  2FDE 23                   inc     hl
+357+  2FDF 72                   ld      (hl), d
+358+  2FE0
+359+  2FE0 C3 87 2F             jp      LPSGFrameLoop
+360+  2FE3
+361+  2FE3              FreqChangeChannel1High:
+362+  2FE3 FE 20                cp      a, $20                          ; channel
+363+  2FE5 20 07                jr      nz, FreqChangeChannel2High
+364+  2FE7
+365+  2FE7 21 BE 2E             ld      hl, FreqRegister1               ; store channel 1 high 6 bits of frequency
+366+  2FEA 0E 02                ld      c, $02
+367+  2FEC
+368+  2FEC 18 DF                jr       UpdateFrequencyRegisterHigh
+369+  2FEE
+370+  2FEE              FreqChangeChannel2High
+371+  2FEE 21 C0 2E             ld      hl, FreqRegister2               ; store channel 2 high 6 bits of frequency
+372+  2FF1 0E 04                ld      c, $04
+373+  2FF3
+374+  2FF3 18 D8                jr       UpdateFrequencyRegisterHigh
+375+  2FF5
+376+  2FF5                      ; process latch command with freq change
+377+  2FF5              FreqChangeProcessLatchCommand:
+378+  2FF5 32 C4 2E             ld      (LastLatchCommand), a           ; store last latch command
+379+  2FF8 FE E0                cp      PSGNoiseRegister
+380+  2FFA 30 34                jr      nc, NoFreqChange                ; noise register command sent directly to the chip
+381+  2FFC
+382+  2FFC CB 67                bit     4, a                            ; check for tone register
+383+  2FFE 20 30                jr      nz, NoFreqChange                ; amplitide register is sent directly
+384+  3000
+385+  3000 E6 60                and     a, PSGChannelMask               ; determine channeé
+386+  3002 FE 00                cp      a, $00                          ; channel 0
+387+  3004 20 18                jr      nz, FreqChangeChannel1Low
+388+  3006
+389+  3006                      ; process channel 0
+390+  3006 21 BC 2E             ld      hl, FreqRegister0
+391+  3009 0E 01                ld      c, $01
+392+  300B
+393+  300B              UpdateFrequencyRegisterLow:
+394+  300B 3A C2 2E             ld      a, (FreqRegisterChanged)        ; Flag register changed
+395+  300E B1                   or      a, c
+396+  300F 32 C2 2E             ld      (FreqRegisterChanged), a
+397+  3012
+398+  3012 7E                   ld      a, (hl)                         ; change lowest four bits
+399+  3013 E6 F0                and     a, $f0
+400+  3015 4F                   ld      c, a
+401+  3016 78                   ld      a, b
+402+  3017 E6 0F                and     a, $0f
+403+  3019 B1                   or      a, c
+404+  301A 77                   ld      (hl), a
+405+  301B
+406+  301B C3 87 2F             jp      LPSGFrameLoop
+407+  301E
+408+  301E              FreqChangeChannel1Low:
+409+  301E FE 20                cp      a, $20                          ; channel
+410+  3020 20 07                jr      nz, FreqChangeChannel2Low
+411+  3022
+412+  3022                      ; process channel 1
+413+  3022 21 BE 2E             ld      hl, FreqRegister1               ; change channel 1 lowest four bits
+414+  3025 0E 02                ld      c, $02
+415+  3027 18 E2                jr      UpdateFrequencyRegisterLow
+416+  3029
+417+  3029              FreqChangeChannel2Low:
+418+  3029 21 C0 2E             ld      hl, FreqRegister2               ; change channel 2 lowest four bits
+419+  302C 0E 04                ld      c, $04
+420+  302E 18 DB                jr      UpdateFrequencyRegisterLow
+421+  3030
+422+  3030              NoFreqChange:
+423+  3030 3A 9E 2E             ld	a, (SndCardBaseAddr)            ; load port address
+424+  3033 4F                   ld	c, a
+425+  3034
+426+  3034 ED 41                out	(c), b                          ; write data to chip
+427+  3036
+428+  3036 C3 87 2F             jp      LPSGFrameLoop
+429+  3039
+430+  3039              LPSGSkipFrame:                                  ; skip frame (decrement frame skip pointer)
+431+  3039 3D                   dec     a
+432+  303A 32 B8 2E             ld      (PSGMusicSkipFrames), a
+433+  303D C9                   ret
+434+  303E
+435+  303E              LPSGCommand:
+436+  303E FE 38                cp      a, PSGWait
+437+  3040 28 07                jr      z, LPSGFrameDone        ; no additional frames
+438+  3042 38 40                jr      c, LPSGOtherCommands    ; other commands?
+439+  3044 E6 07                and     a, $07                  ; take only the last 3 bits for skip frames
+440+  3046 32 B8 2E             ld      (PSGMusicSkipFrames), a ; we got additional frames
+441+  3049
+442+  3049              LPSGFrameDone:
+443+  3049 3A 9F 2E             ld      a, (SndCardType)
+444+  304C FE 01                cp      a, SndCardGame
+445+  304E C0                   ret     nz                      ; frame done for other cards than GameCard
+446+  304F
+447+  304F                      ; in the case of game card recalculate and write out frequency registers
+448+  304F 3A C2 2E             ld      a, (FreqRegisterChanged)
+449+  3052 E6 01                and     $01                             ; check channel 0
+450+  3054 28 0B                jr      z, CheckFreqCannel1
+451+  3056
+452+  3056                      ; update channel 0 freq
+453+  3056 3E 80                ld      a, FreqWriteChannel0
+454+  3058 32 C3 2E             ld      (ChannelFreqCommand), a
+455+  305B 2A BC 2E             ld      hl, (FreqRegister0)
+456+  305E CD B9 30             call    RecalculateAndUpdateFrequency
+457+  3061
+458+  3061              CheckFreqCannel1:
+459+  3061 3A C2 2E             ld      a, (FreqRegisterChanged)
+460+  3064 E6 02                and     $02                             ; check channel 1
+461+  3066 28 0B                jr      z, CheckFreqCannel2
+462+  3068
+463+  3068                      ; update channel 1 freq
+464+  3068 3E A0                ld      a, FreqWriteChannel1
+465+  306A 32 C3 2E             ld      (ChannelFreqCommand), a
+466+  306D 2A BE 2E             ld      hl, (FreqRegister1)
+467+  3070 CD B9 30             call    RecalculateAndUpdateFrequency
+468+  3073
+469+  3073              CheckFreqCannel2:
+470+  3073 3A C2 2E             ld      a, (FreqRegisterChanged)
+471+  3076 E6 04                and     $04                             ; check channel 2
+472+  3078 C8                   ret     z
+473+  3079
+474+  3079                      ; update channel 2 freq
+475+  3079 3E C0                ld      a, FreqWriteChannel2
+476+  307B 32 C3 2E             ld      (ChannelFreqCommand), a
+477+  307E 2A C0 2E             ld      hl, (FreqRegister2)
+478+  3081 C3 B9 30             jp      RecalculateAndUpdateFrequency   ; return
+479+  3084
+480+  3084                      ; process other PSG commands
+481+  3084              LPSGOtherCommands:
+482+  3084 FE 08                cp      a, PSGSubString
+483+  3086 30 12                jr      nc, LPSGSubString
+484+  3088 FE 00                cp      a, PSGEnd
+485+  308A 28 24                jr      z, LPSGMusicLoop
+486+  308C FE 01                cp      a, PSGLoop
+487+  308E 28 01                jr      z, LPSGSetLoopPoint
+488+  3090
+489+  3090                      ; ***************************************************************************
+490+  3090                      ; we should never get here!
+491+  3090                      ; if we do, it means the PSG file is probably corrupted, so we just RET
+492+  3090                      ; ***************************************************************************
+493+  3090
+494+  3090 C9                   ret
+495+  3091
+496+  3091                      ; PSG set loop point command
+497+  3091              LPSGSetLoopPoint:
+498+  3091 2A B4 2E             ld      hl, (PSGMusicPointer)
+499+  3094 22 B6 2E             ld      (PSGMusicLoopPoint), hl
+500+  3097 C3 87 2F             jp      LPSGFrameLoop
+501+  309A
+502+  309A                      ; PSG substring (compressed data) command
+503+  309A              LPSGSubString:
+504+  309A D6 04                sub     a, PSGSubString-4               ; len is value - $08 + 4
+505+  309C 32 B9 2E             ld      (PSGMusicSubstringLen), a       ; save len
+506+  309F 4E                   ld      c, (hl)                         ; load substring address (offset)
+507+  30A0 23                   inc     hl
+508+  30A1 46                   ld      b, (hl)
+509+  30A2 23                   inc     hl
+510+  30A3 22 BA 2E             ld      (PSGMusicSubstringRetAddr), hl  ; save return address
+511+  30A6 2A B2 2E             ld      hl, (PSGMusicStart)
+512+  30A9 09                   add     hl, bc                          ; make substring position to the current pointer
+513+  30AA 22 B4 2E             ld      (PSGMusicPointer), hl           ; store pointer
+514+  30AD C3 87 2F             jp      LPSGFrameLoop
+515+  30B0
+516+  30B0              LPSGMusicLoop:
+517+  30B0 2A B6 2E             ld      hl, (PSGMusicLoopPoint)         ; load loop pointer
+518+  30B3 22 B4 2E             ld      (PSGMusicPointer), hl           ; store pointer
+519+  30B6 C3 87 2F             jp      LPSGFrameLoop
+520+  30B9
+521+  30B9              RecalculateAndUpdateFrequency:
+522+  30B9                      if      PSGFastFreqCalculation != 0
+523+  30B9
+524+  30B9                      ; calculates frequency register value based on approximation (multiplide by 7/8 which is approx. 3.125MHz/3.579MHz)
+525+  30B9 4D                   ld      c, l                            ; save register value to BC
+526+  30BA 44                   ld      b, h
+527+  30BB
+528+  30BB 29                   add     hl, hl                          ; multiple freq register value by 8
+529+  30BC 29                   add     hl, hl
+530+  30BD 29                   add     hl, hl
+531+  30BE
+532+  30BE ED 42                sbc     hl, bc                          ; substract once the orogianl value (HL=freq register * 7)
+533+  30C0
+534+  30C0 29                   add     hl, hl                          ; shift right by one bit so the highest six bits will be in the H register
+535+  30C1
+536+  30C1 CB 3D                srl     l                               ; get freq register lowset four bits
+537+  30C3 CB 3D                srl     l                               ; (move upper four bits to lowest four bits)
+538+  30C5 CB 3D                srl     l
+539+  30C7 CB 3D                srl     l
+540+  30C9
+541+  30C9                      ; load port address
+542+  30C9 3A 9E 2E             ld      a, (SndCardBaseAddr)
+543+  30CC 4F                   ld      c, a
+544+  30CD
+545+  30CD                      ; prepare ands send command
+546+  30CD 3A C3 2E             ld      a, (ChannelFreqCommand)
+547+  30D0 B5                   or      a, l
+548+  30D1 ED 79                out     (c), a
+549+  30D3
+550+  30D3                      ; send high bits
+551+  30D3 3A 9E 2E             ld      a, (SndCardBaseAddr)            ; just for timing (32 Tcycle must be between the two 'out' intstruction)
+552+  30D6 4F                   ld      c, a
+553+  30D7 7C                   ld      a, h                            ; get highest five bits
+554+  30D8 E6 3F                and     a, $3f
+555+  30DA 00                   nop                                     ; timing only
+556+  30DB ED 79                out     (c), a
+557+  30DD
+558+  30DD
+559+  30DD                      else
+560+  30DD ~
+561+  30DD ~                    ; calculates frequency register value based on the chip clock frequency (3.125MHz) vs. PSG file frequency (3.579MHz)
+562+  30DD ~                    ld      b, l                            ; save lowest bits
+563+  30DD ~
+564+  30DD ~                    ; get higest five bit (shift rigth HL by five bits then use high eight bits)
+565+  30DD ~                    add     hl, hl
+566+  30DD ~                    add     hl, hl
+567+  30DD ~                    add     hl, hl
+568+  30DD ~
+569+  30DD ~                    ld      a, h                            ; A = highest 5 bits
+570+  30DD ~                    and     a, $1f                          ; remove other bits
+571+  30DD ~                    add     a, a                            ; multiply by two for table lookup
+572+  30DD ~
+573+  30DD ~                    ld      hl, FreqMultiplierTable         ; HL = table address + 2 * highest 5 bits
+574+  30DD ~                    ld      e, a
+575+  30DD ~                    ld      d, 0
+576+  30DD ~                    add     hl, de
+577+  30DD ~
+578+  30DD ~                    ld      e, (hl)                         ; DE = freq value of the higest 5 bits
+579+  30DD ~                    inc     hl
+580+  30DD ~                    ld      d, (hl)
+581+  30DD ~
+582+  30DD ~                    ld      a, b                            ; freq ergister lowest 5 bits
+583+  30DD ~                    and     a, $1f
+584+  30DD ~                    add     a, a
+585+  30DD ~
+586+  30DD ~                    ld      hl, FreqMultiplierTable         ; HL = table address + 2 * highest 5 bits
+587+  30DD ~                    ld      c, a
+588+  30DD ~                    ld      b, 0
+589+  30DD ~                    add     hl, bc
+590+  30DD ~
+591+  30DD ~                    ld      a, (hl)
+592+  30DD ~                    inc     hl
+593+  30DD ~                    ld      h, (hl)
+594+  30DD ~                    ld      l, a
+595+  30DD ~
+596+  30DD ~                    ; shift hl to right by five bits (left by three and use highest eight bits)
+597+  30DD ~                    add     hl, hl
+598+  30DD ~                    add     hl, hl
+599+  30DD ~                    add     hl, hl
+600+  30DD ~                    ld      l, h
+601+  30DD ~                    ld      h, 0
+602+  30DD ~
+603+  30DD ~                    add     hl, de                          ; HL = multipled frequency
+604+  30DD ~
+605+  30DD ~                    ; load channel command
+606+  30DD ~                    ld      a, (ChannelFreqCommand)
+607+  30DD ~                    ld      b, a
+608+  30DD ~
+609+  30DD ~                    ; load port
+610+  30DD ~                    ld      a, (SndCardBaseAddr)
+611+  30DD ~                    ld      c, a
+612+  30DD ~
+613+  30DD ~                    ; send lowest 4 bits of frequency
+614+  30DD ~                    ld      a, l
+615+  30DD ~                    and     a, 0x0f
+616+  30DD ~                    or      b
+617+  30DD ~                    out     (c), a
+618+  30DD ~
+619+  30DD ~                    ; send higest 6 bits
+620+  30DD ~                    add     hl, hl                          ; shift left by four bits
+621+  30DD ~                    add     hl, hl
+622+  30DD ~                    add     hl, hl
+623+  30DD ~                    add     hl, hl
+624+  30DD ~                    ld      a, h                            ; use only highest eight bits
+625+  30DD ~                    and     a, $3f
+626+  30DD ~                    out     (c), a
+627+  30DD ~
+628+  30DD                      endif
+629+  30DD
+630+  30DD C9                   ret
+631+  30DE
+632+  30DE
+633+  30DE
+634+  30DE
+635+  30DE
+636+  30DE
+637+  30DE
+638+  30DE
+639+  30DE
+# file closed: psgplayer.a80
+948   30DE
+949   30DE                      include "resources.a80"
+# file opened: resources.a80
+  1+  30DE              megaplex
+  2+  30DE 40                   db	64			; A sprite szélessége byte-okban
+  3+  30DF F0                   db	240			; A sprite magassága
+  4+  30E0 FF 94 00 AB          db	255,148,0,171,3,163,4,3,87,6,250,0,5,9,187,14,16,186,4,0,154,10,251,11,0,11,155,15,0,133,62,63
+  4+  30E4 03 A3 04 03
+  4+  30E8 57 06 FA 00
+  4+  30EC 05 09 BB 0E
+  4+  30F0 10 BA 04 00
+  4+  30F4 9A 0A FB 0B
+  4+  30F8 00 0B 9B 0F
+  4+  30FC 00 85 3E 3F
+  5+  3100 06 04 31 3F          db	6,4,49,63,87,5,183,63,5,5,247,63,117,29,63,83,13,198,51,232,63,2,171,95,63,10,158,114,123,63,79,158
+  5+  3104 57 05 B7 3F
+  5+  3108 05 05 F7 3F
+  5+  310C 75 1D 3F 53
+  5+  3110 0D C6 33 E8
+  5+  3114 3F 02 AB 5F
+  5+  3118 3F 0A 9E 72
+  5+  311C 7B 3F 4F 9E
+  6+  3120 3F 5E 05 17          db	63,94,5,23,225,2,155,63,8,140,63,65,171,21,63,68,34,240,63,3,33,216,63,197,66,164,63,87,3,18,33,63
+  6+  3124 E1 02 9B 3F
+  6+  3128 08 8C 3F 41
+  6+  312C AB 15 3F 44
+  6+  3130 22 F0 3F 03
+  6+  3134 21 D8 3F C5
+  6+  3138 42 A4 3F 57
+  6+  313C 03 12 21 3F
+  7+  3140 57 59 3F A3          db	87,89,63,163,24,145,63,3,156,63,0,4,218,63,3,24,63,187,25,63,156,230,99,170,63,0,9,38,63,6,227,2
+  7+  3144 18 91 3F 03
+  7+  3148 9C 3F 00 04
+  7+  314C DA 3F 03 18
+  7+  3150 3F BB 19 3F
+  7+  3154 9C E6 63 AA
+  7+  3158 3F 00 09 26
+  7+  315C 3F 06 E3 02
+  8+  3160 8E BF 2D 98          db	142,191,45,152,35,108,63,148,161,94,63,0,6,171,63,12,158,63,231,45,140,88,124,191,126,40,1,56,191,224,253,63
+  8+  3164 23 6C 3F 94
+  8+  3168 A1 5E 3F 00
+  8+  316C 06 AB 3F 0C
+  8+  3170 9E 3F E7 2D
+  8+  3174 8C 58 7C BF
+  8+  3178 7E 28 01 38
+  8+  317C BF E0 FD 3F
+  9+  3180 03 16 CC D0          db	3,22,204,208,249,255,67,83,63,195,57,200,63,255,20,42,63,35,120,63,125,255,96,187,63,2,135,83,63,87,199,130
+  9+  3184 F9 FF 43 53
+  9+  3188 3F C3 39 C8
+  9+  318C 3F FF 14 2A
+  9+  3190 3F 23 78 3F
+  9+  3194 7D FF 60 BB
+  9+  3198 3F 02 87 53
+  9+  319C 3F 57 C7 82
+ 10+  31A0 67 06 56 3F          db	103,6,86,63,249,16,111,63,57,178,76,34,171,143,249,152,249,255,131,72,63,36,255,184,58,63,176,161,130,216,63,7
+ 10+  31A4 F9 10 6F 3F
+ 10+  31A8 39 B2 4C 22
+ 10+  31AC AB 8F F9 98
+ 10+  31B0 F9 FF 83 48
+ 10+  31B4 3F 24 FF B8
+ 10+  31B8 3A 3F B0 A1
+ 10+  31BC 82 D8 3F 07
+ 11+  31C0 E1 00 3F 07          db	225,0,63,7,208,0,19,192,222,187,131,226,63,51,119,15,72,126,51,51,61,126,208,0,119,123,126,97,128,0,95,19
+ 11+  31C4 D0 00 13 C0
+ 11+  31C8 DE BB 83 E2
+ 11+  31CC 3F 33 77 0F
+ 11+  31D0 48 7E 33 33
+ 11+  31D4 3D 7E D0 00
+ 11+  31D8 77 7B 7E 61
+ 11+  31DC 80 00 5F 13
+ 12+  31E0 00 A4 FF 0E          db	0,164,255,14,235,255,97,128,3,227,255,220,255,64,78,160,0,192,8,252,0,127,191,131,221,3,130,32,31,216,3,63
+ 12+  31E4 EB FF 61 80
+ 12+  31E8 03 E3 FF DC
+ 12+  31EC FF 40 4E A0
+ 12+  31F0 00 C0 08 FC
+ 12+  31F4 00 7F BF 83
+ 12+  31F8 DD 03 82 20
+ 12+  31FC 1F D8 03 3F
+ 13+  3200 BF 38 0F E4          db	191,56,15,228,0,3,96,0,66,129,3,135,163,0,224,33,1,235,244,63,192,7,249,0,127,191,7,164,3,255,255,3
+ 13+  3204 00 03 60 00
+ 13+  3208 42 81 03 87
+ 13+  320C A3 00 E0 21
+ 13+  3210 01 EB F4 3F
+ 13+  3214 C0 07 F9 00
+ 13+  3218 7F BF 07 A4
+ 13+  321C 03 FF FF 03
+ 14+  3220 FB 03 07 E7          db	251,3,7,231,191,0,71,200,0,255,6,250,0,0,1
+ 14+  3224 BF 00 47 C8
+ 14+  3228 00 FF 06 FA
+ 14+  322C 00 00 01
+# file closed: resources.a80
+950   322F
+951   322F              RESOURCE_LOAD_ADDRESS:
+952   322F
+953   322F              GAMES_INFO_COUNT:
+954   322F 00                   db      0               ; Number of games in the current collection
+955   3230
+956   3230              GAMES_INFO:
+957   3230                      end
+# file closed: megamenu.a80
+
+Value    Label
+------ - -----------------------------------------------------------
+0x3091   LPSGSetLoopPoint
+0x30B0   LPSGMusicLoop
+0x309A   LPSGSubString
+0x3073   CheckFreqCannel2
+0x30B9   RecalculateAndUpdateFrequency
+0x3061   CheckFreqCannel1
+0x3084   LPSGOtherCommands
+0x3049   LPSGFrameDone
+0x3029   FreqChangeChannel2Low
+0x300B   UpdateFrequencyRegisterLow
+0x301E   FreqChangeChannel1Low
+0x2FEE   FreqChangeChannel2High
+0x2FCD   UpdateFrequencyRegisterHigh
+0x2FE3   FreqChangeChannel1High
+0x2FF5   FreqChangeProcessLatchCommand
+0x3030   NoFreqChange
+0x303E   LPSGCommand
+0x2FAB   LPSGSendToChip
+0x2FA1   LPSGProcessCommand
+0x2F87   LPSGFrameLoop
+0x3039   LPSGSkipFrame
+0x2F2C X DetectSndCardStringFound
+0x2F35   DetectSndCardStringNotFound
+0x2F24   DetectSndCardStringInnerCmp
+0x2F21   DetectSndCardStringInnerLoop
+0x2F05   SndInitChipLoop
+0x2EFD   SndInitChip
+0x2EE9   DetectMultiSound
+0x2F12   DetectSndCardString
+0x2EC4   LastLatchCommand
+0x2EC3   ChannelFreqCommand
+0x2EC2   FreqRegisterChanged
+0x2EC0   FreqRegister2
+0x2EBE   FreqRegister1
+0x2EBC   FreqRegister0
+0x2EBA   PSGMusicSubstringRetAddr
+0x2EB9   PSGMusicSubstringLen
+0x2EB8   PSGMusicSkipFrames
+0x2EB6   PSGMusicLoopPoint
+0x2EB4   PSGMusicPointer
+0x2EB2   PSGMusicStart
+0x2EB1   PSGMusicStatus
+0x2EAD   SndCardDetectAddr
+0x2EA7   DetectMultiStr
+0x2EA0   DetectGameStr
+0x2E9E   SndCardBaseAddr
+0x00C0   FreqWriteChannel2
+0x00A0   FreqWriteChannel1
+0x0080   FreqWriteChannel0
+0x0000   PSGEnd
+0x0001   PSGLoop
+0x0008   PSGSubString
+0x0038   PSGWait
+0x0060   PSGChannelMask
+0x00E0   PSGNoiseRegister
+0x0040   PSGData
+0x0080   PSGLatch
+0x0004   SndChannelCount
+0x0007 X GameCardClockDisable
+0x000F   GameCardClockEnable
+0x000F   GameCardControlPort
+0x0002   SndCardSndMx
+0x0001   SndCardGame
+0x0001   PSGFastFreqCalculation
+0x2E9E   GAMES_COLLECTION_END
+0x2E4F   SAVED_FILE_LENGTH
+0x2E4D   SAVED_DESTINATION_ADDRESS
+0x2E21   LAppendFileNameExtensionExit
+0x2E14   LAppendFileNameExtensionLoop
+0x2E09   LCopyFileNameExit
+0x2DFC   LCopyFileNameLoop
+0x2DF7 X SAVED_GRAPH_MODE
+0x2DF6 X SAVED_MEM_PAGES
+0x2DE5   dzx7t_offset_end
+0x2DEE   dzx7t_exit
+0x2DB7   dzx7t_len_value_loop
+0x2DC1   dzx7t_len_value_START
+0x2DAD   dzx7t_len_size_loop
+0x2DF2   dzx7t_load_bits
+0x2DA2   dzx7t_main_loop
+0x2DA0   dzx7t_copy_byte_loop
+0x2D99   DrawHorizontalLineL1
+0x2D92 X DrawHorizontalLine
+0x2D7F   StringEnd
+0x2D75   CopyNextCharacter
+0x2D82   WrongSymbolType
+0x2D82   SymbolNameDifferent
+0x2D5E   CompareSymbol
+0x2D86   NextSymbol
+0x2D54   SerachForSymbol
+0x2D4A   SetPaging
+0x2CC8 X Char_Z
+0x2CBE X Char_Y
+0x2CB4 X Char_X
+0x2CAA X Char_W
+0x2CA0 X Char_V
+0x2C96 X Char_U
+0x2C8C X Char_T
+0x2C82 X Char_S
+0x2C78 X Char_R
+0x2C6E X Char_Q
+0x2C64 X Char_P
+0x2C5A X Char_O
+0x2C50 X Char_N
+0x2C46 X Char_M
+0x2C3C X Char_L
+0x2C32 X Char_K
+0x2C28 X Char_J
+0x2C1E X Char_I
+0x2C14 X Char_H
+0x2C0A X Char_G
+0x2C00 X Char_F
+0x2BF6 X Char_E
+0x2BEC X Char_D
+0x2BE2 X Char_C
+0x2BD8 X Char_B
+0x2BCE X Char_A
+0x2BC4 X Char_9
+0x2BBA X Char_8
+0x2BB0 X Char_7
+0x2BA6 X Char_6
+0x2B9C X Char_5
+0x2B92 X Char_4
+0x2B88 X Char_3
+0x2B7E X Char_2
+0x2B74 X Char_1
+0x2B6A X Char_0
+0x2B69 X CharacterHeight
+0x2B68 X CharacterWidth
+0x2B67 X CharacterCnt
+0x00AA X BORDER_WHITE
+0x00A8 X BORDER_YELLOW
+0x00A2 X BORDER_CYAN
+0x00A0 X BORDER_GREEN
+0x008A X BORDER_MAGENTA
+0x008A X BORDER_RED
+0x0082 X BORDER_BLUE
+0x0080 X BORDER_BLACK2
+0x002A X BORDER_GRAY
+0x0028 X BORDER_DARKYELLOW
+0x0022 X BORDER_DARKCYAN
+0x0020 X BORDER_DARKGREEN
+0x000A X BORDER_DARKMAGENTA
+0x0008 X BORDER_DARKRED
+0x0002 X BORDER_DARKBLUE
+0x0000 X BORDER_BLACK
+0x2B65   end
+0x2B5D   n6
+0x2B56 X n5
+0x2B54   n4
+0x2B31   n1
+0x2B44   n3
+0x2B24   n2
+0x2B59   StrLen
+0x2B1E   n7
+0x2B38   modify
+0x2B0E   NumBfrEmpty
+0x2B07   NumBfr
+0x2B06   X10
+0x2AFC   NumRef
+0x2AF8   jump
+0x2B10   ConvertDecNum16
+0x2AE1   SkipChar
+0x0007   CHAR_HEIGHT
+0x2AD0   PutChar1
+0x2ABA   Inner
+0x2AB4   StoreStartPos
+0x2A9A   Skip2_2
+0x2A8E   Skip2_1
+0x2A78   Skip1_2
+0x2A6C   Skip1_1
+0x2A58   Inner2
+0x2A31   Inner1
+0x2B6A   CharacterTable
+0x2A17   CharDraw
+0x2A12   jump1
+0x2CD2   Char_Squere
+0x2A05   CheckNumberChar
+0x2D04   Char_Slash
+0x29FC   jump9
+0x2CFA   Char_Comma
+0x29F3   jump8
+0x2D22   Char_Exclamation
+0x29EA   jump7
+0x2D2C   Char_Minus
+0x29E1   jump6
+0x2D0E   Char_DotDot
+0x29D8   jump5
+0x2D18   Char_Arrow
+0x29CF   jump4
+0x2CF0   Char_Dot
+0x29C6   jump3
+0x2CE6   Char_Plus
+0x29BD   jump2
+0x2A29   RawAddrOk
+0x2CDC   Char_Space
+0x29A5   DrawSpaceLoop
+0x2AA2   PosToVidmemAddress
+0x29AF   NormalSpace
+0x2996   jmpNotProp
+0x29B4   jump0
+0x2984   SpacePropFlg
+0x2A53   PutCharMask
+0x2A7F   CharColorSaveMask2
+0x2A5D   CharColorSaveMask1
+0x2983   Exit
+0x2A2C   PutCharModeJump
+0x2A2F   PutCharOverwrite
+0x2A3F   CharColorSave2
+0x2A32   CharColorSave1
+0x2977   MaskMode
+0x2A45   CharBackgroundSave2
+0x2A38   CharBackgroundSave1
+0x0055   COLOR_WHITE
+0x0054   COLOR_YELLOW
+0x0051   COLOR_CYAN
+0x0050   COLOR_GREEN
+0x0045   COLOR_MAGENTA
+0x0044   COLOR_RED
+0x0041   COLOR_BLUE
+0x0040   COLOR_BLACK2
+0x0015   COLOR_GRAY
+0x0014   COLOR_DARKYELLOW
+0x0011   COLOR_DARKCYAN
+0x0010   COLOR_DARKGREEN
+0x0005   COLOR_DARKMAGENTA
+0x0004   COLOR_DARKRED
+0x0001   COLOR_DARKBLUE
+0x0000   COLOR_BLACK
+0x2930   CharColorTable
+0x2006   LeftScrollPixel
+0x1FFE   ScrollPhase3
+0x1FF0   ScrollPhase2
+0x2004   LeftScrollLinePixels
+0x1FE4   ScrollPhase1
+0x1FD3   LeftScrollLine
+0x1FC1   LeftScrollNoStringEnd
+0x1FCA   LeftScrollPhaseNonzero
+0x2941   CharBackgroundSave
+0x2940   CharColorSave
+0x2032   SCROLL_TEXT
+0x2985   PutChar
+0x1F5B   SCROLL_BACKGROUND_COLOR
+0x1F5A   SCROLL_CHAR_COLOR
+0x1F58   SCROLL_CHARACTER
+0x1F57   SCROLL_PHASE
+0x1F56   SCROLL_TEXT_DELAY
+0x1F80   TextScroll
+0x2F77   MusicPlayer_IT
+0x1F3F   InterruptEntry
+0x1F53   ItVectorSave
+0x1ED0   LDecompressMultiply
+0x1ED4   LDecompressNoMultiply
+0x3230   GAMES_INFO
+0x1E67   index_ok
+0x1EEC   RESULTS_END_STRING
+0x2AE6   DrawNumber
+0x1E2B   right_next_mask
+0x1E33   right_image_finished
+0x1E04   copy_right_image_line
+0x1E02   start_copy_right_image_line
+0x1DEB   left_next_mask
+0x1DF3   left_image_finished
+0x1DC2   start_copy_left_image_line
+0x1DA1   next_line
+0x2D45   SetPaging_U0_U1_VID_U3
+0x1D7A   ICRightIndexOk
+0x1D5D   ICLeftImageIndexOk
+0x0000   GamesCollection.Index
+0x0008   LOADING_TEXT_LENGTH
+0x1F15   LOADING_TEXT
+0x0008   YEAR_BUFFER_LENGTH
+0x1F1D   YEAR_BUFFER
+0x0001   GamesCollection.Year
+0x1F10   MUS_FILE_EXTENSION
+0x0000   SndCardNone
+0x0008   GamesCollection.YearDec
+0x322F   GAMES_INFO_COUNT
+0x2E24   LoadBinaryFile
+0x322F   RESOURCE_LOAD_ADDRESS
+0x2E0C   AppendFileNameExtension
+0x1F0B   BIN_FILE_EXTENSION
+0x2DF8   CopyFileName
+0x000A   GamesCollection.File
+0x1D17   DrawLoadingText
+0x1C60   move_left_2
+0x1C56   move_left_1
+0x1E34   DrawCarousselEnd
+0x1DB0   DrawLeftImage
+0x1DC4   copy_left_image_line
+0x1D99   DrawCenterImage
+0x1DF4   DrawRightImage
+0x1D95   DrawCarousselStart
+0x1EC7   DecompressGameScreen
+0x1C1E   move_right_2
+0x1C16   move_right_1
+0x1D85   DrawCarousel
+0x1BC4   LCalculateCollectionPointer
+0x1BC7   LStoreCollectionPointer
+0x0013   GamesCollection
+0x1BB7   LStoreIndex
+0x2E51   GAMES_COLLECTION_COUNT
+0x1BB6   LDecrementCollectionIndex
+0x1D33   SaveSelectionCollectionPos
+0x2D50   LetStringVariable
+0x1F25   FILENAME_VARIABLE
+0x1EAB   GetCurrentGamesInfoAddress
+0x1EE8   HIDE_PALETTE
+0x1B7C   ExitWithDisplay
+0x2D40   SetPaging_U0_U1_U2_U3
+0x2F69   StopMusic
+0x1B4B   NoCardToDeinit
+0x1F36   RestoreInterrupt
+0x1B3B   ReturnToBasic
+0x1B3C   StoreExitMode
+0x1B97   RunProgram
+0x1BE5   MoveDown
+0x1BA7   MoveUp
+0x1BF6   MoveRight
+0x1C37   move_left
+0x1B09   WaitForKey
+0x1F5C   InitTextScroll
+0x1F27   InitInterrupt
+0x2F4D   StartMusic
+0x2EAF   PSGFile
+0x2F48   InitMusicPlayer
+0x1B03   NoCardToInit
+0x2E9F   SndCardType
+0x1D3E   InitCarousel
+0x1CEC   DrawMenu
+0x1C79   LoadCollectionResources
+0x2E52   GAMES_COLLECTION
+0x2EC5   DetectSndCard
+0x2D3B   SetPaging_U0_U1_U2_SYS
+0x1F01   DATES_STRING
+0x1EF7   TVC_GAMES_STRING
+0x2AB6   DrawStr
+0x1EEE   CARTRIDGE_STRING
+0x2957   SetCharColor
+0x2942   SetCharacterBackgroundColor
+0x2D9E   dzx7_turbo
+0x30DE   megaplex
+0x2D36   SetPaging_U0_U1_VID_SYS
+0x1A6A   EXIT_MODE
+0x1A68   MUSIC_DATA_POINTER
+0x1A5B   FILE_NAME_BUFFER
+0x1A59   RIGHT_IMAGE_ADDRESS
+0x1A57   CENTER_IMAGE_ADDRESS
+0x1A55   LEFT_IMAGE_ADDRESS
+0x1A53   YEAR_DEC
+0x1A52   IMAGE_COUNT
+0x1A51   IMAGE_INDEX
+0x1A4F   CURRENT_COLLECTION
+0x1A4E   CURRENT_COLLECTION_INDEX
+0x1A4C   HLS_SAVE
+0x1A4A   DES_SAVE
+0x1A48   BCS_SAVE
+0x1A46   IY_SAVE
+0x1A44   IX_SAVE
+0x1A6B   START
+0x0022   GamesInfo.File
+0x0002   GamesInfo.Title
+0x0000   GamesInfo.Image
+0x0032   GamesInfo
+0x000C   FILE_NAME_LENGTH
+0x0002   SCROLL_DELAY
+0x000E   RIGHT_IMAGE_WIDTH
+0x0012   LEFT_IMAGE_OFFSET
+0x0078   GAME_IMAGE_HEIGHT
+0x9632   RIGHT_IMAGE_COORDINATES
+0x9610   CENTER_IMAGE_COORDINATES
+0x9600   LEFT_IMAGE_COORDINATES
+0x0020   GAME_IMAGE_WIDTH
+0x0040   SCREEN_WIDTH
+0x001B   ESCAPE
+0x000D   RETURN
+0x0006   JOY_FIRE
+0x0018   JOY_DOWN
+0x0005   JOY_UP
+0x0013   JOY_LEFT
+0x0004   JOY_RIGHT
+0x00D4   CAS_FN_CLOSE_RD
+0x00D2   CAS_FN_BKIN
+0x00D1   CAS_FN_CHIN
+0x00D3   CAS_FN_OPEN
+0x000C   PAL
+0x0004   VMODE
+0x0093   KBD_STATUS
+0x0091   KBD_CHIN
+0x0090   P_U0_U1_VID_U3
+0x00B0   P_U0_U1_U2_U3
+0x0050   P_U0_U1_VID_SYS
+0x0020 X P_SYS_U1_U2_CART
+0x0030 X P_U0_U1_U2_CART
+0x0070   P_U0_U1_U2_SYS
+0x0071   CRTC_DATA
+0x0070   CRTC_ADDRESS
+0x0006 X GRAPHICS_MODE_REG
+0x0002   PAGE_REG
+0xE000   IMAGE_BUFFER2
+0xD000   IMAGE_BUFFER1
+0xC000   IMAGE_BUFFER0
+0x003E   IT_VECTOR_ADDR
+0x4000   U3_SIZE
+0xC000   U3_ADDRESS
+0x8000   VIDEOMEM
+0x0B4F   BORDER
+0x0B4E   PAPER
+0x0B4D   INK
+0x0B0A   OUT_ASSIGN
+0x1724   CHAIN
+0x0B13 X GRAPH_MODE
+0x0003   P_SAVE
+0x0003   LOADER_FILE
+0x0002 X LOADER_MULTICART
+0x0001 X LOADER_MEGACART
+0x0001   LOADERTYPE
+0x19EF   PROGRAM_START_ADDRESS
